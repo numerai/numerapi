@@ -298,10 +298,13 @@ class SignalsAPI(base_api.Api):
             signalsUserProfile(username: $username) {
               dailyUserPerformances {
                 rank
+                corr20dRank
                 date
                 sharpe
                 mmcRep
+                mmc20dRep
                 reputation
+                corr20dRep
               }
             }
           }
