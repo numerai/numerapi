@@ -3,6 +3,7 @@
 import datetime
 import logging
 import os
+import warnings
 from io import BytesIO
 from typing import Dict, List, Tuple, Union
 
@@ -841,8 +842,144 @@ class Api:
         utils.replace(results, "updatedAt", utils.parse_datetime_string)
         return results
 
+    def submission_scores(
+        self,
+        model_id: str,
+        display_name: str | None = None,
+        version: str | None = None,
+        day: int | None = None,
+        resolved: bool | None = None,
+        tournament: int | None = None,
+        last_n_rounds: int | None = None,
+        distinct_on_round: bool | None = None,
+    ) -> List[Dict]:
+        """Fetch submission score history for a model.
+
+        Args:
+            model_id (str): target model UUID
+            display_name (str, optional): score metric name filter
+            version (str, optional): score version filter
+            day (int, optional): day filter
+            resolved (bool, optional): resolved-state filter
+            tournament (int, optional): tournament filter, defaults to the
+                API instance tournament
+            last_n_rounds (int, optional): limit by most recent rounds
+            distinct_on_round (bool, optional): keep only the latest score per
+                round after applying other filters
+
+        Returns:
+            list of dicts: list of submission score entries
+        """
+
+        query = """
+          query($modelId: ID!
+                $displayName: String
+                $version: String
+                $day: Int
+                $resolved: Boolean
+                $tournament: Int
+                $lastNRounds: Int
+                $distinctOnRound: Boolean) {
+            submissionScores(modelId: $modelId
+                             displayName: $displayName
+                             version: $version
+                             day: $day
+                             resolved: $resolved
+                             tournament: $tournament
+                             lastNRounds: $lastNRounds
+                             distinctOnRound: $distinctOnRound) {
+                roundId
+                submissionId
+                roundNumber
+                roundResolveTime
+                roundScoreTime
+                roundCloseStakingTime
+                value
+                percentile
+                displayName
+                version
+                date
+                day
+                resolveDate
+                resolved
+            }
+          }
+        """
+        arguments = {
+            "modelId": model_id,
+            "displayName": display_name,
+            "version": version,
+            "day": day,
+            "resolved": resolved,
+            "tournament": self.tournament_id if tournament is None else tournament,
+            "lastNRounds": last_n_rounds,
+            "distinctOnRound": distinct_on_round,
+        }
+        scores = self.raw_query(query, arguments)["data"]["submissionScores"]
+        for score in scores:
+            utils.replace(score, "roundResolveTime", utils.parse_datetime_string)
+            utils.replace(score, "roundScoreTime", utils.parse_datetime_string)
+            utils.replace(score, "roundCloseStakingTime", utils.parse_datetime_string)
+            utils.replace(score, "date", utils.parse_datetime_string)
+            utils.replace(score, "resolveDate", utils.parse_datetime_string)
+        return scores
+
+    def pending_model_payouts(self, tournament: int | None = None) -> Dict:
+        """Fetch actual and pending payouts for the authenticated user's models.
+
+        Args:
+            tournament (int, optional): tournament filter, defaults to the API
+                instance tournament
+
+        Returns:
+            dict: payout groups with `actual` and `pending` lists
+        """
+
+        query = """
+          query($tournament: Int!) {
+            pendingModelPayouts(tournament: $tournament) {
+                actual {
+                    roundId
+                    roundNumber
+                    roundResolveTime
+                    modelId
+                    modelName
+                    modelDisplayName
+                    payoutNmr
+                    payoutValue
+                    currencySymbol
+                }
+                pending {
+                    roundId
+                    roundNumber
+                    roundResolveTime
+                    modelId
+                    modelName
+                    modelDisplayName
+                    payoutNmr
+                    payoutValue
+                    currencySymbol
+                }
+            }
+          }
+        """
+        arguments = {
+            "tournament": self.tournament_id if tournament is None else tournament
+        }
+        payouts = self.raw_query(query, arguments, authorization=True)["data"][
+            "pendingModelPayouts"
+        ]
+        for payout_type in ["actual", "pending"]:
+            for payout in payouts[payout_type]:
+                utils.replace(payout, "roundResolveTime", utils.parse_datetime_string)
+                utils.replace(payout, "payoutNmr", utils.parse_float_string)
+                utils.replace(payout, "payoutValue", utils.parse_float_string)
+        return payouts
+
     def round_model_performances_v2(self, model_id: str):
         """Fetch round model performance of a user.
+
+        DEPRECATED - please use `submission_scores` instead when possible.
 
         Args:
             model_id (str)
@@ -871,6 +1008,13 @@ class Api:
                     * percentile (`float`)
                     * value (`float`): value of the metric
         """
+        warnings.warn(
+            "`round_model_performances_v2` is deprecated because it relies on "
+            "`v2RoundModelPerformances`. Use `submission_scores` instead when "
+            "possible.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
         query = """
           query($modelId: String!

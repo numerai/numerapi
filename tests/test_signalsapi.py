@@ -13,6 +13,7 @@ def api_fixture():
     return api
 
 
+@pytest.mark.live_api
 def test_get_leaderboard(api):
     lb = api.get_leaderboard(1)
     assert len(lb) == 1
