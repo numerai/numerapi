@@ -1,3 +1,4 @@
+import json
 import os
 import pytest
 import responses
@@ -116,3 +117,148 @@ def test_set_submission_webhook(api):
         'https://triggerurl'
     )
     assert res
+
+
+@responses.activate
+def test_v3_stake_auth(api):
+    api.token = ("", "")
+    data = {"data": {"v3StakeAuth": {
+        "authorizationSigner": "0xsigner",
+        "authorizationDigest": "0xdigest",
+        "chainId": "11155111",
+        "deadline": "1770000000",
+        "maxAmount": "25",
+        "modelId": "0xmodel",
+        "nmrAddress": "0xnmr",
+        "nonce": "0",
+        "roundId": "4321",
+        "signature": "0x1234",
+        "staker": "0xstaker",
+        "stakingAddress": "0xstaking",
+        "submissionId": "submission-id",
+        "submissionHash": "0xhash",
+        "tournamentId": "8",
+    }}}
+    responses.add(responses.POST, base_api.API_TOURNAMENT_URL, json=data)
+
+    result = api.v3_stake_auth("submission-id", "0xstaker", amount=25)
+
+    body = json.loads(responses.calls[0].request.body)
+    assert "v3StakeAuth" in body["query"]
+    assert body["variables"]["submissionId"] == "submission-id"
+    assert body["variables"]["maxAmount"] == "25"
+    assert "maxAmount" in body["query"]
+    assert result["maxAmount"] == "25"
+    assert result["amount"] == "25"
+    assert result["authorizationDigest"] == "0xdigest"
+
+
+@responses.activate
+def test_v3_stake_auth_accepts_max_amount(api):
+    api.token = ("", "")
+    data = {"data": {"v3StakeAuth": {
+        "authorizationSigner": "0xsigner",
+        "authorizationDigest": "0xdigest",
+        "chainId": "11155111",
+        "deadline": "1770000000",
+        "maxAmount": "30",
+        "modelId": "0xmodel",
+        "nmrAddress": "0xnmr",
+        "nonce": "0",
+        "roundId": "4321",
+        "signature": "0x1234",
+        "staker": "0xstaker",
+        "stakingAddress": "0xstaking",
+        "submissionId": "submission-id",
+        "submissionHash": "0xhash",
+        "tournamentId": "8",
+    }}}
+    responses.add(responses.POST, base_api.API_TOURNAMENT_URL, json=data)
+
+    result = api.v3_stake_auth(
+        "submission-id",
+        "0xstaker",
+        max_amount="30",
+    )
+
+    body = json.loads(responses.calls[0].request.body)
+    assert body["variables"]["maxAmount"] == "30"
+    assert result["maxAmount"] == "30"
+    assert result["amount"] == "30"
+
+
+@responses.activate
+def test_v3_stake_config(api):
+    api.token = ("", "")
+    data = {"data": {"v3StakeConfig": {
+        "address": "0xstaking",
+        "authorizationSigner": "0xsigner",
+        "nmrAddress": "0xnmr",
+        "owner": "0xowner",
+        "paused": False,
+        "pendingOwner": "0xpending",
+        "serviceWallet": "0xservice",
+    }}}
+    responses.add(responses.POST, base_api.API_TOURNAMENT_URL, json=data)
+
+    result = api.v3_stake_config()
+
+    body = json.loads(responses.calls[0].request.body)
+    assert "v3StakeConfig" in body["query"]
+    assert result["authorizationSigner"] == "0xsigner"
+
+
+@responses.activate
+def test_v3_stake_round(api):
+    api.token = ("", "")
+    data = {"data": {"v3StakeRound": {
+        "closeTime": "1",
+        "merkleRoot": "0xroot",
+        "openTime": "0",
+        "payoutFactor": "0.5",
+        "remainingBurn": "0",
+        "remainingPayout": "2",
+        "resolveTime": "2",
+        "resolved": False,
+        "roundId": "4321",
+        "stakeCap": "100",
+        "stakeThreshold": "10",
+        "state": "open",
+        "totalPayout": "2",
+        "totalStaked": "50",
+        "tournamentId": "8",
+    }}}
+    responses.add(responses.POST, base_api.API_TOURNAMENT_URL, json=data)
+
+    result = api.v3_stake_round(4321)
+
+    body = json.loads(responses.calls[0].request.body)
+    assert "v3StakeRound" in body["query"]
+    assert body["variables"]["roundId"] == "4321"
+    assert result["roundId"] == "4321"
+
+
+@responses.activate
+def test_v3_stake_claim(api):
+    api.token = ("", "")
+    data = {"data": {"v3StakeClaim": {
+        "apiModelId": "api-model-id",
+        "burnAmountWei": "0",
+        "merkleRoot": "0xroot",
+        "modelId": "0xmodel",
+        "payoutAmountWei": "2000000000000000000",
+        "proof": ["0xproof"],
+        "roundId": "4321",
+        "staker": "0xstaker",
+        "submissionId": "submission-id",
+        "tournamentId": "8",
+    }}}
+    responses.add(responses.POST, base_api.API_TOURNAMENT_URL, json=data)
+
+    result = api.v3_stake_claim(4321, "api-model-id", "0xstaker")
+
+    body = json.loads(responses.calls[0].request.body)
+    assert "v3StakeClaim" in body["query"]
+    assert body["variables"]["roundId"] == "4321"
+    assert body["variables"]["modelId"] == "api-model-id"
+    assert result["proof"] == ["0xproof"]
