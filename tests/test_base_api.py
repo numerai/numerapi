@@ -271,6 +271,8 @@ def test_round_model_performances_v2_warns(api):
     assert isinstance(res[0]["roundResolveTime"], datetime.datetime)
     assert res[0]["submissionScores"][0]["payoutPending"] == decimal.Decimal("0.8")
 
+
+@responses.activate
 def test_v3_stake_auth(api):
     api.token = ("", "")
     data = {"data": {"v3StakeAuth": {
