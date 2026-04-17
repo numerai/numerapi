@@ -427,7 +427,7 @@ class Api:
 
         max_amount = max_amount if max_amount is not None else amount
         query = """
-          mutation($submissionId: ID!, $staker: String!, $maxAmount: String!) {
+          query($submissionId: ID!, $staker: String!, $maxAmount: String!) {
             v3StakeAuth(
               submissionId: $submissionId
               staker: $staker

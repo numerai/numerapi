@@ -297,6 +297,8 @@ def test_v3_stake_auth(api):
     result = api.v3_stake_auth("submission-id", "0xstaker", amount=25)
 
     body = json.loads(responses.calls[0].request.body)
+    assert "mutation" not in body["query"]
+    assert "query(" in body["query"]
     assert "v3StakeAuth" in body["query"]
     assert body["variables"]["submissionId"] == "submission-id"
     assert body["variables"]["maxAmount"] == "25"
@@ -335,6 +337,8 @@ def test_v3_stake_auth_accepts_max_amount(api):
     )
 
     body = json.loads(responses.calls[0].request.body)
+    assert "mutation" not in body["query"]
+    assert "query(" in body["query"]
     assert body["variables"]["maxAmount"] == "30"
     assert result["maxAmount"] == "30"
     assert result["amount"] == "30"
