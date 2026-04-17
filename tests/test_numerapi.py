@@ -16,17 +16,20 @@ def api_fixture():
     return api
 
 
+@pytest.mark.live_api
 def test_get_competitions(api):
     res = api.get_competitions(tournament=1)
     assert isinstance(res, list)
     assert len(res) > 80
 
 
+@pytest.mark.live_api
 def test_get_current_round(api):
     current_round = api.get_current_round()
     assert current_round >= 82
 
 
+@pytest.mark.live_api
 @pytest.mark.parametrize("fun", ["get_account", "wallet_transactions"])
 def test_unauthorized_requests(api, fun):
     with pytest.raises(ValueError) as err:
@@ -38,6 +41,7 @@ def test_unauthorized_requests(api, fun):
            "Your session is invalid or has expired." in str(err.value)
 
 
+@pytest.mark.live_api
 def test_error_handling(api):
     # String instead of Int
     with pytest.raises(ValueError):
