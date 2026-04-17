@@ -383,6 +383,211 @@ class Api:
         }
         return mapping
 
+    def v3_stake_auth(
+        self,
+        submission_id: str,
+        staker: str,
+        amount: float | str | None = None,
+        max_amount: float | str | None = None,
+    ) -> Dict:
+        """Issue a staking v3 authorization for a selected submission.
+
+        Args:
+            submission_id (str): submission id for the selected submission
+            staker (str): staker wallet address
+            amount (float or str, optional): max stake amount for the
+                authorization. Retained as a backwards-compatible alias for
+                `max_amount`.
+            max_amount (float or str, optional): max stake amount for the
+                authorization.
+
+        Returns:
+            dict: authorization payload with the following fields:
+
+                * authorizationSigner (`str`)
+                * authorizationDigest (`str`)
+                * chainId (`str`)
+                * deadline (`str`)
+                * maxAmount (`str`)
+                * amount (`str`) alias for `maxAmount`
+                * modelId (`str`)
+                * nmrAddress (`str`)
+                * nonce (`str`)
+                * roundId (`str`)
+                * signature (`str`)
+                * staker (`str`)
+                * stakingAddress (`str`)
+                * submissionId (`str`)
+                * submissionHash (`str`)
+                * tournamentId (`str`)
+        """
+        if (amount is None) == (max_amount is None):
+            raise ValueError("Provide exactly one of amount or max_amount.")
+
+        max_amount = max_amount if max_amount is not None else amount
+        query = """
+          mutation($submissionId: ID!, $staker: String!, $maxAmount: String!) {
+            v3StakeAuth(
+              submissionId: $submissionId
+              staker: $staker
+              maxAmount: $maxAmount
+            ) {
+              authorizationSigner
+              authorizationDigest
+              chainId
+              deadline
+              maxAmount
+              modelId
+              nmrAddress
+              nonce
+              roundId
+              signature
+              staker
+              stakingAddress
+              submissionId
+              submissionHash
+              tournamentId
+            }
+          }
+        """
+        arguments = {
+            "submissionId": submission_id,
+            "staker": staker,
+            "maxAmount": str(max_amount),
+        }
+        authorization = self.raw_query(query, arguments, authorization=True)["data"][
+            "v3StakeAuth"
+        ]
+        authorization["amount"] = authorization["maxAmount"]
+        return authorization
+
+    def v3_stake_config(self) -> Dict:
+        """Fetch staking v3 contract configuration.
+
+        Returns:
+            dict: staking v3 configuration with the following fields:
+
+                * address (`str`)
+                * authorizationSigner (`str`)
+                * nmrAddress (`str`)
+                * owner (`str`)
+                * paused (`bool`)
+                * pendingOwner (`str`)
+                * serviceWallet (`str`)
+        """
+        query = """
+          query {
+            v3StakeConfig {
+              address
+              authorizationSigner
+              nmrAddress
+              owner
+              paused
+              pendingOwner
+              serviceWallet
+            }
+          }
+        """
+        return self.raw_query(query, authorization=True)["data"]["v3StakeConfig"]
+
+    def v3_stake_round(self, round_id: int | str) -> Dict:
+        """Fetch staking v3 round status by round id.
+
+        Args:
+            round_id (int or str): round id
+
+        Returns:
+            dict: staking v3 round data with the following fields:
+
+                * closeTime (`str`)
+                * merkleRoot (`str`)
+                * openTime (`str`)
+                * payoutFactor (`str`)
+                * remainingBurn (`str`)
+                * remainingPayout (`str`)
+                * resolveTime (`str`)
+                * resolved (`bool`)
+                * roundId (`str`)
+                * stakeCap (`str`)
+                * stakeThreshold (`str`)
+                * state (`str`)
+                * totalPayout (`str`)
+                * totalStaked (`str`)
+                * tournamentId (`str`)
+        """
+        query = """
+          query($roundId: String!) {
+            v3StakeRound(roundId: $roundId) {
+              closeTime
+              merkleRoot
+              openTime
+              payoutFactor
+              remainingBurn
+              remainingPayout
+              resolveTime
+              resolved
+              roundId
+              stakeCap
+              stakeThreshold
+              state
+              totalPayout
+              totalStaked
+              tournamentId
+            }
+          }
+        """
+        arguments = {"roundId": str(round_id)}
+        return self.raw_query(query, arguments, authorization=True)["data"][
+            "v3StakeRound"
+        ]
+
+    def v3_stake_claim(self, round_id: int | str, model_id: str, staker: str) -> Dict:
+        """Fetch a staking v3 claim proof for a model and staker.
+
+        Args:
+            round_id (int or str): round id
+            model_id (str): model id
+            staker (str): staker wallet address
+
+        Returns:
+            dict: claim payload with the following fields:
+
+                * apiModelId (`str`)
+                * burnAmountWei (`str`)
+                * merkleRoot (`str`)
+                * modelId (`str`)
+                * payoutAmountWei (`str`)
+                * proof (`list` of `str`)
+                * roundId (`str`)
+                * staker (`str`)
+                * submissionId (`str`)
+                * tournamentId (`str`)
+        """
+        query = """
+          query($roundId: String!, $modelId: ID!, $staker: String!) {
+            v3StakeClaim(roundId: $roundId, modelId: $modelId, staker: $staker) {
+              apiModelId
+              burnAmountWei
+              merkleRoot
+              modelId
+              payoutAmountWei
+              proof
+              roundId
+              staker
+              submissionId
+              tournamentId
+            }
+          }
+        """
+        arguments = {
+            "roundId": str(round_id),
+            "modelId": model_id,
+            "staker": staker,
+        }
+        return self.raw_query(query, arguments, authorization=True)["data"][
+            "v3StakeClaim"
+        ]
+
     def get_current_round(self, tournament: int | None = None) -> int | None:
         """Get number of the current active round.
 
@@ -1200,7 +1405,7 @@ class Api:
             return False
         if raw is None:
             return False
-        open_time = utils.parse_datetime_string(raw['openTime'])
+        open_time = utils.parse_datetime_string(raw["openTime"])
         now = datetime.datetime.now(tz=pytz.utc)
         is_new_round = open_time > now - datetime.timedelta(hours=hours)
         return is_new_round

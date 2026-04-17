@@ -1,5 +1,6 @@
 import pytest
 import datetime
+import json
 import pytz
 import responses
 
@@ -99,3 +100,4 @@ def test_check_new_round(api):
     assert api.check_new_round()
     # second
     assert not api.check_new_round()
+
