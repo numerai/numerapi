@@ -14,6 +14,7 @@ import requests
 from numerapi import utils
 
 API_TOURNAMENT_URL = "https://api-tournament.numer.ai"
+_DEFAULT_TOURNAMENT = object()
 
 
 class Api:
@@ -619,6 +620,84 @@ class Api:
             return None
         round_num = data["number"]
         return round_num
+
+    def list_rounds(
+        self,
+        tournament: int | None | object = _DEFAULT_TOURNAMENT,
+        number: int | None = None,
+        target: str | None = None,
+        status: str | None = None,
+        limit: int | None = None,
+    ) -> List[Dict]:
+        """List rounds with the filters supported by the round resolver.
+
+        Args:
+            tournament (int, optional): tournament filter, defaults to the API
+                instance tournament. Pass `None` to omit the tournament filter
+            number (int, optional): round number filter
+            target (str, optional): round target filter
+            status (str, optional): round status filter. One of `upcoming`,
+                `open`, `resolving`, or `resolved`
+            limit (int, optional): maximum number of rounds to return
+
+        Returns:
+            list of dicts: round entries matching the provided filters
+        """
+        query = """
+            query($tournament: Int
+                  $number: Int
+                  $target: String
+                  $status: RoundStatus
+                  $limit: Int) {
+              rounds(tournament: $tournament
+                     number: $number
+                     target: $target
+                     status: $status
+                     limit: $limit) {
+                id
+                tournament
+                number
+                target
+                closeTime
+                closeStakingTime
+                openTime
+                scoreTime
+                resolveTime
+                resolvedGeneral
+                resolvedStaking
+                payoutFactor
+                stakeThreshold
+                minCorrMultiplier
+                maxCorrMultiplier
+                defaultCorrMultiplier
+                minMmcMultiplier
+                maxMmcMultiplier
+                defaultMmcMultiplier
+                dataDatestamp
+              }
+            }
+        """
+        if tournament is _DEFAULT_TOURNAMENT:
+            tournament = self.tournament_id if self.tournament_id else None
+        arguments = {
+            "tournament": tournament,
+            "number": number,
+            "target": target,
+            "status": None if status is None else status.upper(),
+            "limit": limit,
+        }
+        rounds = self.raw_query(query, arguments)["data"]["rounds"]
+        for round_info in rounds:
+            for field in [
+                "closeTime",
+                "closeStakingTime",
+                "openTime",
+                "scoreTime",
+                "resolveTime",
+            ]:
+                utils.replace(round_info, field, utils.parse_datetime_string)
+            utils.replace(round_info, "payoutFactor", utils.parse_float_string)
+        return rounds
 
     def set_bio(self, model_id: str, bio: str) -> bool:
         """Set bio field for a model id.

@@ -179,6 +179,69 @@ def test_submission_scores(api):
 
 
 @responses.activate
+def test_list_rounds(api):
+    api.tournament_id = 11
+    data = {
+        "data": {
+            "rounds": [
+                {
+                    "id": "round-1",
+                    "tournament": 11,
+                    "number": 123,
+                    "target": "main",
+                    "closeTime": "2026-03-27T00:00:00Z",
+                    "closeStakingTime": "2026-03-26T12:00:00Z",
+                    "openTime": "2026-03-20T00:00:00Z",
+                    "scoreTime": "2026-03-29T00:00:00Z",
+                    "resolveTime": "2026-04-01T00:00:00Z",
+                    "resolvedGeneral": False,
+                    "resolvedStaking": False,
+                    "payoutFactor": "0.8",
+                    "stakeThreshold": 0.1,
+                    "minCorrMultiplier": 0.0,
+                    "maxCorrMultiplier": 1.0,
+                    "defaultCorrMultiplier": 0.5,
+                    "minMmcMultiplier": 0.0,
+                    "maxMmcMultiplier": 1.0,
+                    "defaultMmcMultiplier": 0.5,
+                    "dataDatestamp": 20260320,
+                }
+            ]
+        }
+    }
+    responses.add(responses.POST, base_api.API_TOURNAMENT_URL, json=data)
+
+    res = api.list_rounds(number=123, target="main", status="open", limit=5)
+
+    assert len(res) == 1
+    assert isinstance(res[0]["closeTime"], datetime.datetime)
+    assert isinstance(res[0]["closeStakingTime"], datetime.datetime)
+    assert isinstance(res[0]["openTime"], datetime.datetime)
+    assert isinstance(res[0]["scoreTime"], datetime.datetime)
+    assert isinstance(res[0]["resolveTime"], datetime.datetime)
+    assert isinstance(res[0]["payoutFactor"], decimal.Decimal)
+
+    request_body = json.loads(responses.calls[0].request.body)
+    assert request_body["variables"]["tournament"] == 11
+    assert request_body["variables"]["number"] == 123
+    assert request_body["variables"]["target"] == "main"
+    assert request_body["variables"]["status"] == "OPEN"
+    assert request_body["variables"]["limit"] == 5
+
+
+@responses.activate
+def test_list_rounds_without_tournament_filter(api):
+    api.tournament_id = 11
+    data = {"data": {"rounds": []}}
+    responses.add(responses.POST, base_api.API_TOURNAMENT_URL, json=data)
+
+    api.list_rounds(tournament=None)
+
+    request_body = json.loads(responses.calls[0].request.body)
+    assert request_body["variables"]["tournament"] is None
+
+
+@responses.activate
 def test_pending_model_payouts(api):
     api.token = ("", "")
     api.tournament_id = 12
