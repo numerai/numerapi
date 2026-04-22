@@ -630,8 +630,6 @@ class Api:
         """List rounds with the filters supported by the round resolver.
 
         Args:
-            tournament (int, optional): tournament filter, defaults to the API
-                instance tournament. Pass `None` to omit the tournament filter
             number (int, optional): round number filter
             target (str, optional): round target filter
             status (str, optional): round status filter. One of `upcoming`,

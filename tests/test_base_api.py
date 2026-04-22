@@ -230,15 +230,15 @@ def test_list_rounds(api):
 
 
 @responses.activate
-def test_list_rounds_without_tournament_filter(api):
+def test_list_rounds_uses_api_tournament_id_by_default(api):
     api.tournament_id = 11
     data = {"data": {"rounds": []}}
     responses.add(responses.POST, base_api.API_TOURNAMENT_URL, json=data)
 
-    api.list_rounds(tournament=None)
+    api.list_rounds()
 
     request_body = json.loads(responses.calls[0].request.body)
-    assert request_body["variables"]["tournament"] is None
+    assert request_body["variables"]["tournament"] == 11
 
 
 @responses.activate
