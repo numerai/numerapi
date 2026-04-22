@@ -14,7 +14,6 @@ import requests
 from numerapi import utils
 
 API_TOURNAMENT_URL = "https://api-tournament.numer.ai"
-_DEFAULT_TOURNAMENT = object()
 
 
 class Api:
@@ -623,7 +622,6 @@ class Api:
 
     def list_rounds(
         self,
-        tournament: int | None | object = _DEFAULT_TOURNAMENT,
         number: int | None = None,
         target: str | None = None,
         status: str | None = None,
@@ -677,10 +675,8 @@ class Api:
               }
             }
         """
-        if tournament is _DEFAULT_TOURNAMENT:
-            tournament = self.tournament_id if self.tournament_id else None
         arguments = {
-            "tournament": tournament,
+            "tournament": self.tournament_id,
             "number": number,
             "target": target,
             "status": None if status is None else status.upper(),
@@ -1133,7 +1129,6 @@ class Api:
         version: str | None = None,
         day: int | None = None,
         resolved: bool | None = None,
-        tournament: int | None = None,
         last_n_rounds: int | None = None,
         distinct_on_round: bool | None = None,
     ) -> List[Dict]:
@@ -1195,7 +1190,7 @@ class Api:
             "version": version,
             "day": day,
             "resolved": resolved,
-            "tournament": self.tournament_id if tournament is None else tournament,
+            "tournament": self.tournament_id,
             "lastNRounds": last_n_rounds,
             "distinctOnRound": distinct_on_round,
         }
