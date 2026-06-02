@@ -1,1 +1,6 @@
-m2r
+sphinx-mdinclude
+python-dateutil
+tqdm
+pandas
+click
+pytz
