@@ -14,6 +14,8 @@ import tqdm
 
 logger = logging.getLogger(__name__)
 
+DOWNLOAD_CHUNK_SIZE = 1024 * 1024  # 1 MiB
+
 
 def load_secrets() -> tuple:
     """load secrets from environment variables or dotenv file"""
@@ -96,9 +98,9 @@ def download_file(url: str, dest_path: str, show_progress_bars: bool = True):
     # Update progress bar to reflect how much of the file is already downloaded
     pbar.update(file_size)
     with open(temp_path, "ab") as dest_file:
-        for chunk in req.iter_content(1024):
+        for chunk in req.iter_content(DOWNLOAD_CHUNK_SIZE):
             dest_file.write(chunk)
-            pbar.update(1024)
+            pbar.update(len(chunk))
     # move temp file to target destination
     os.replace(temp_path, dest_path)
     return dest_path
