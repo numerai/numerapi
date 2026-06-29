@@ -1,6 +1,8 @@
 # Changelog
 Notable changes to this project.
 
+## [2.23.2] - 2026-06-02
+- increase dataset download chunk size to 1 MB to improve download speeds
 
 ## [2.23.1] - 2026-04-23
 - fix package version lookup
