@@ -349,6 +349,58 @@ class Api:
             for item in sorted(data, key=lambda x: x["displayName"])
         }
 
+    def public_user_profile(self, username: str) -> Dict:
+        """Fetch the public profile of a user / model.
+
+        The model is resolved within this API's tournament
+        (``self.tournament_id``), so the returned ``id`` is the model UUID
+        for *this* tournament. That id is what e.g. :meth:`submission_scores`
+        expects as ``model_id``. This works identically for Numerai Classic,
+        Signals and Crypto - the only difference is the tournament the
+        concrete API class is configured for.
+
+        Args:
+            username (str): the model name (called "username" on the
+                Crypto / Signals leaderboards)
+
+        Returns:
+            dict: user profile including the following fields:
+
+                * username (`str`)
+                * startDate (`datetime`)
+                * id (`str`) - the model UUID, usable as `model_id`
+                * bio (`str`)
+                * nmrStaked (`decimal.Decimal`)
+
+        Example:
+            >>> api = CryptoAPI()
+            >>> api.public_user_profile("quixotic15")
+            {'bio': None,
+             'id': '0c58da1a-8df4-4e98-a99a-71a12fbbe36b',
+             'startDate': datetime.datetime(2024, 11, 28, ...),
+             'nmrStaked': None,
+             'username': 'quixotic15'}
+        """
+        query = """
+          query($model_name: String!
+                $tournament: Int) {
+            v3UserProfile(model_name: $model_name
+                          tournament: $tournament) {
+              id
+              startDate
+              username
+              bio
+              nmrStaked
+            }
+          }
+        """
+        arguments = {"model_name": username, "tournament": self.tournament_id}
+        data = self.raw_query(query, arguments)["data"]["v3UserProfile"]
+        # convert strings to python objects
+        utils.replace(data, "startDate", utils.parse_datetime_string)
+        utils.replace(data, "nmrStaked", utils.parse_float_string)
+        return data
+
     def get_models(self, tournament: int | None = None) -> Dict:
         """Get mapping of account model names to model ids for convenience
 
