@@ -1,3 +1,6 @@
+import decimal
+from unittest.mock import patch
+
 import pytest
 import responses
 
@@ -11,6 +14,27 @@ from numerapi import base_api
 def api_fixture():
     api = numerapi.SignalsAPI(verbosity='DEBUG')
     return api
+
+
+@patch("numerapi.signalsapi.SignalsAPI.raw_query")
+def test_stake_get(mocked, api):
+    mocked.return_value = {"data": {"v3UserProfile": {"stakeValue": "14.63"}}}
+
+    stake = api.stake_get("uuazed")
+
+    assert stake == decimal.Decimal("14.63")
+    args, _ = mocked.call_args
+    # current stake lives in `stakeValue`; `totalStake` no longer exists
+    assert "stakeValue" in args[0]
+    assert "totalStake" not in args[0]
+    assert args[1]["tournament"] == api.tournament_id == 11
+
+
+@patch("numerapi.signalsapi.SignalsAPI.raw_query")
+def test_stake_get_no_stake(mocked, api):
+    # a model with no stake returns null -> None, not a KeyError
+    mocked.return_value = {"data": {"v3UserProfile": {"stakeValue": None}}}
+    assert api.stake_get("uuazed") is None
 
 
 @pytest.mark.live_api
