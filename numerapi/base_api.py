@@ -331,7 +331,7 @@ class Api:
             {'uuazed': '9b157d9b-ce61-4ab5-9413-413f13a0c0a6', ...}
         """
         query = """
-            query($username: Str!
+            query($username: String!
                   $tournament: Int) {
                 accountProfile(username: $username
                                tournament: $tournament){

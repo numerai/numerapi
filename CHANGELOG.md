@@ -1,6 +1,9 @@
 # Changelog
 Notable changes to this project.
 
+## [2.23.3] - 2026-06-30
+- fix `models_of_account` referencing incorrect type `Str!` instead of `String!`
+
 ## [2.23.2] - 2026-06-02
 - increase dataset download chunk size to 1 MB to improve download speeds
 
