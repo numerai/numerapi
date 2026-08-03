@@ -7,6 +7,7 @@ Contents
     :maxdepth: 2
 
     changelog
+    round-score-configs
     license
 
 Indices and tables
