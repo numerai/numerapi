@@ -273,48 +273,6 @@ class NumerAPI(base_api.Api):
         data = self.raw_query(query, arguments)['data']['v3UserProfile']
         return data['stakeValue']
 
-    def public_user_profile(self, username: str) -> Dict:
-        """Fetch the public profile of a user.
-
-        Args:
-            username (str)
-
-        Returns:
-            dict: user profile including the following fields:
-                * username (`str`)
-                * startDate (`datetime`)
-                * id (`string`)
-                * bio (`str`)
-                * nmrStaked (`float`)
-
-        Example:
-            >>> api = NumerAPI()
-            >>> api.public_user_profile("integration_test")
-            {'bio': 'The official example model. Submits example predictions.',
-             'id': '59de8728-38e5-45bd-a3d5-9d4ad649dd3f',
-             'startDate': datetime.datetime(
-                2018, 6, 6, 17, 33, 21, tzinfo=tzutc()),
-             'nmrStaked': '57.582371875005243780',
-             'username': 'integration_test'}
-
-        """
-        query = """
-          query($model_name: String!) {
-            v3UserProfile(model_name: $model_name) {
-              id
-              startDate
-              username
-              bio
-              nmrStaked
-            }
-          }
-        """
-        arguments = {'model_name': username}
-        data = self.raw_query(query, arguments)['data']['v3UserProfile']
-        # convert strings to python objects
-        utils.replace(data, "startDate", utils.parse_datetime_string)
-        return data
-
     def daily_model_performances(self, username: str) -> List[Dict]:
         """Fetch daily performance of a user.
 

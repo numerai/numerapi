@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 import responses
 
@@ -5,6 +7,23 @@ import pandas as pd
 
 import numerapi
 from numerapi import base_api
+
+
+@patch("numerapi.base_api.Api.raw_query")
+def test_public_user_profile(mocked, api):
+    mocked.return_value = {
+        "data": {"v3UserProfile": {
+            "id": "49962e16-6bc9-4a78-a751-09c20c99bcb3",
+            "username": "floury_kerril_moodle",
+            "startDate": "2020-05-12T01:23:00Z",
+            "bio": None, "nmrStaked": None}}}
+
+    profile = api.public_user_profile("floury_kerril_moodle")
+
+    assert profile["id"] == "49962e16-6bc9-4a78-a751-09c20c99bcb3"
+    args, _ = mocked.call_args
+    # signals models must be resolved within the signals tournament (11)
+    assert args[1]["tournament"] == api.tournament_id == 11
 
 
 @pytest.fixture(scope='function', name="api")
