@@ -401,6 +401,72 @@ def test_list_rounds_keeps_coexisting_and_unfamiliar_score_configs(api):
 
 
 @responses.activate
+def test_list_rounds_orders_numeric_score_versions_numerically(api):
+    configs = [
+        _round_score_config(
+            "correlation",
+            config_id="corr-9",
+            version="9",
+            multiplier=0.9,
+            round_number_start=200,
+        ),
+        _round_score_config(
+            "correlation",
+            config_id="corr-10",
+            version="10",
+            multiplier=1.0,
+            round_number_start=200,
+        ),
+    ]
+    responses.add(
+        responses.POST,
+        base_api.API_TOURNAMENT_URL,
+        json={"data": {"rounds": [{"roundScoreConfigs": configs}]}},
+    )
+
+    returned_round = api.list_rounds()[0]
+
+    assert [
+        returned_round["minCorrMultiplier"],
+        returned_round["maxCorrMultiplier"],
+        returned_round["defaultCorrMultiplier"],
+    ] == [1.0, 1.0, 1.0]
+
+
+@responses.activate
+def test_list_rounds_fails_closed_for_ambiguous_non_numeric_versions(api):
+    configs = [
+        _round_score_config(
+            "correlation",
+            config_id="corr-10",
+            version="10",
+            multiplier=1.0,
+            round_number_start=200,
+        ),
+        _round_score_config(
+            "correlation",
+            config_id="corr-next",
+            version="next",
+            multiplier=1.1,
+            round_number_start=200,
+        ),
+    ]
+    responses.add(
+        responses.POST,
+        base_api.API_TOURNAMENT_URL,
+        json={"data": {"rounds": [{"roundScoreConfigs": configs}]}},
+    )
+
+    returned_round = api.list_rounds()[0]
+
+    assert [
+        returned_round["minCorrMultiplier"],
+        returned_round["maxCorrMultiplier"],
+        returned_round["defaultCorrMultiplier"],
+    ] == [None, None, None]
+
+
+@responses.activate
 def test_list_rounds_uses_api_tournament_id_by_default(api):
     api.tournament_id = 11
     data = {"data": {"rounds": []}}

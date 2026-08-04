@@ -746,20 +746,34 @@ class Api:
                 for config in round_info["roundScoreConfigs"]
                 if config["isPayout"] and config["name"] == score_name
             ]
-            config = max(
-                matches,
-                key=lambda item: (
-                    item["roundNumberStart"],
-                    item["version"],
-                    item["id"],
-                ),
-                default=None,
-            )
+            config = Api._select_legacy_round_config(matches)
             for prefix, config_field in multiplier_fields.items():
                 field = f"{prefix}{legacy_name}Multiplier"
                 round_info[field] = (
                     None if config is None else config[config_field]
                 )
+
+    @staticmethod
+    def _select_legacy_round_config(configs: List[Dict]) -> Dict | None:
+        """Select the latest config, failing closed on ambiguous versions."""
+        if not configs:
+            return None
+
+        latest_start = max(item["roundNumberStart"] for item in configs)
+        candidates = [
+            item for item in configs if item["roundNumberStart"] == latest_start
+        ]
+        if len(candidates) == 1:
+            return candidates[0]
+
+        try:
+            return max(
+                candidates,
+                key=lambda item: (int(item["version"]), item["id"]),
+            )
+        except (TypeError, ValueError):
+            # A future non-numeric version contract cannot be ordered safely.
+            return None
 
     def set_bio(self, model_id: str, bio: str) -> bool:
         """Set bio field for a model id.

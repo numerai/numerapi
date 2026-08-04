@@ -70,8 +70,11 @@ is exactly `correlation`, MMC keys select only a payout config whose `name` is
 exactly `meta_model_contribution`, and the keys are `None` when there is no
 exact match. Alpha and FNC are never projected as Corr; MPC is never projected
 as MMC. If multiple exact payout configs exist, the projection uses the config
-with the newest `roundNumberStart`, then `version` and `id`, while the complete
-list remains available unchanged.
+with the newest `roundNumberStart`, then compares the numeric `version` values
+as integers and uses `id` for a numeric-version tie. If multiple configs at the
+newest start contain a non-numeric future version, the compatibility keys are
+`None` rather than guessing an order. The complete list remains available
+unchanged in either case.
 
 These six compatibility keys are scheduled for removal in numerapi 3.0.0.
 `list_rounds()` never exposed the three legacy TC multiplier fields, so this
