@@ -151,49 +151,6 @@ class SignalsAPI(base_api.Api):
         create = self.raw_query(create_query, arguments, authorization=True)
         return create['data']['createSignalsSubmission']['id']
 
-    def public_user_profile(self, username: str) -> Dict:
-        """Fetch the public Numerai Signals profile of a user.
-
-        Args:
-            username (str)
-
-        Returns:
-            dict: user profile including the following fields:
-
-                * username (`str`)
-                * startDate (`datetime`)
-                * id (`string`)
-                * bio (`str`)
-                * nmrStaked (`decimal.Decimal`)
-
-        Example:
-            >>> api = SignalsAPI()
-            >>> api.public_user_profile("floury_kerril_moodle")
-            {'bio': None,
-             'id': '635db2a4-bdc6-4e5d-b515-f5120392c8c9',
-             'startDate': datetime.datetime(2019, 3, 26, 0, 43),
-             'username': 'floury_kerril_moodle',
-             'nmrStaked': Decimal('14.630994874320760131')}
-
-        """
-        query = """
-          query($username: String!) {
-            v2SignalsProfile(modelName: $username) {
-              id
-              startDate
-              username
-              bio
-              nmrStaked
-            }
-          }
-        """
-        arguments = {'username': username}
-        data = self.raw_query(query, arguments)['data']['v2SignalsProfile']
-        # convert strings to python objects
-        utils.replace(data, "startDate", utils.parse_datetime_string)
-        utils.replace(data, "nmrStaked", utils.parse_float_string)
-        return data
-
     def daily_model_performances(self, username: str) -> List[Dict]:
         """Fetch daily Numerai Signals performance of a model.
 
