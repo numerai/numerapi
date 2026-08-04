@@ -331,7 +331,7 @@ class Api:
             {'uuazed': '9b157d9b-ce61-4ab5-9413-413f13a0c0a6', ...}
         """
         query = """
-            query($username: Str!
+            query($username: String!
                   $tournament: Int) {
                 accountProfile(username: $username
                                tournament: $tournament){
@@ -637,7 +637,16 @@ class Api:
             limit (int, optional): maximum number of rounds to return
 
         Returns:
-            list of dicts: round entries matching the provided filters
+            list of dicts: round entries matching the provided filters. Each
+            entry includes ``roundScoreConfigs``, whose items retain the exact
+            score identity and per-round payout settings returned by the API.
+
+            The legacy ``minCorrMultiplier`` through
+            ``defaultMmcMultiplier`` keys remain until numerapi 3.0.0. They are
+            compatibility projections of payout configs whose names are
+            exactly ``correlation`` or ``meta_model_contribution``; they are
+            ``None`` when no such payout config exists. Use
+            ``roundScoreConfigs`` for all new integrations.
         """
         query = """
             query($tournament: Int
@@ -663,13 +672,30 @@ class Api:
                 resolvedStaking
                 payoutFactor
                 stakeThreshold
-                minCorrMultiplier
-                maxCorrMultiplier
-                defaultCorrMultiplier
-                minMmcMultiplier
-                maxMmcMultiplier
-                defaultMmcMultiplier
                 dataDatestamp
+                roundScoreConfigs {
+                  id
+                  scoreConfigId
+                  roundNumberStart
+                  roundNumberEnd
+                  name
+                  version
+                  displayName
+                  totalScoreDays
+                  returnsLagDays
+                  dataDelayDays
+                  universe
+                  isCanonScore
+                  isPayout
+                  scoringStart
+                  scoringEnd
+                  minMultiplier
+                  maxMultiplier
+                  defaultMultiplier
+                  clipThreshold
+                  stakeThreshold
+                  payoutFactor
+                }
               }
             }
         """
@@ -691,7 +717,63 @@ class Api:
             ]:
                 utils.replace(round_info, field, utils.parse_datetime_string)
             utils.replace(round_info, "payoutFactor", utils.parse_float_string)
+            for config in round_info["roundScoreConfigs"]:
+                utils.replace(
+                    config, "scoringStart", utils.parse_datetime_string
+                )
+                utils.replace(
+                    config, "scoringEnd", utils.parse_datetime_string
+                )
+            self._add_legacy_round_multipliers(round_info)
         return rounds
+
+    @staticmethod
+    def _add_legacy_round_multipliers(round_info: dict) -> None:
+        """Add deprecated, identity-safe round multiplier projections."""
+        legacy_scores = {
+            "Corr": "correlation",
+            "Mmc": "meta_model_contribution",
+        }
+        multiplier_fields = {
+            "min": "minMultiplier",
+            "max": "maxMultiplier",
+            "default": "defaultMultiplier",
+        }
+
+        for legacy_name, score_name in legacy_scores.items():
+            matches = [
+                config
+                for config in round_info["roundScoreConfigs"]
+                if config["isPayout"] and config["name"] == score_name
+            ]
+            config = Api._select_legacy_round_config(matches)
+            for prefix, config_field in multiplier_fields.items():
+                field = f"{prefix}{legacy_name}Multiplier"
+                round_info[field] = (
+                    None if config is None else config[config_field]
+                )
+
+    @staticmethod
+    def _select_legacy_round_config(configs: List[Dict]) -> Dict | None:
+        """Select the latest config, failing closed on ambiguous versions."""
+        if not configs:
+            return None
+
+        latest_start = max(item["roundNumberStart"] for item in configs)
+        candidates = [
+            item for item in configs if item["roundNumberStart"] == latest_start
+        ]
+        if len(candidates) == 1:
+            return candidates[0]
+
+        try:
+            return max(
+                candidates,
+                key=lambda item: (int(item["version"]), item["id"]),
+            )
+        except (TypeError, ValueError):
+            # A future non-numeric version contract cannot be ordered safely.
+            return None
 
     def set_bio(self, model_id: str, bio: str) -> bool:
         """Set bio field for a model id.
