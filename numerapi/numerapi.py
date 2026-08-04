@@ -247,32 +247,6 @@ class NumerAPI(base_api.Api):
         self.logger.info("Stake already at desired value. Nothing to do.")
         return None
 
-    def stake_get(self, modelname: str) -> float:
-        """Get your current stake amount.
-
-        Args:
-            modelname (str)
-
-        Returns:
-            float: current stake (including projected NMR earnings from open
-                   rounds)
-
-        Example:
-            >>> api = NumerAPI()
-            >>> api.stake_get("uuazed")
-            1.1
-        """
-        query = """
-          query($modelname: String!) {
-            v3UserProfile(modelName: $modelname) {
-               stakeValue
-            }
-          }
-        """
-        arguments = {'modelname': modelname}
-        data = self.raw_query(query, arguments)['data']['v3UserProfile']
-        return data['stakeValue']
-
     def daily_model_performances(self, username: str) -> List[Dict]:
         """Fetch daily performance of a user.
 

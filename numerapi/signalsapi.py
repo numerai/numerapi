@@ -2,7 +2,6 @@
 
 from typing import List, Dict, Tuple, Union
 import os
-import decimal
 from io import BytesIO
 
 import requests
@@ -240,30 +239,3 @@ class SignalsAPI(base_api.Api):
         """
         path = self.download_dataset("signals/v1.0/live.parquet")
         return pd.read_parquet(path).numerai_ticker.tolist()
-
-    def stake_get(self, username) -> decimal.Decimal | None:
-        """get current stake for a given user
-
-        Args:
-            username (str)
-
-        Returns:
-            decimal.Decimal or None: current stake, or None if the model has
-                no stake
-
-        Example:
-            >>> SignalsAPI().stake_get("uuazed")
-            Decimal('14.63')
-        """
-        query = """
-          query($model_name: String!
-                $tournament: Int) {
-            v3UserProfile(model_name: $model_name
-                          tournament: $tournament) {
-              stakeValue
-            }
-          }
-        """
-        arguments = {'model_name': username, 'tournament': self.tournament_id}
-        data = self.raw_query(query, arguments)['data']['v3UserProfile']
-        return utils.parse_float_string(data['stakeValue'])

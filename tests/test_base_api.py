@@ -74,6 +74,41 @@ def test__login(api):
     assert api.token == ("id", "key")
 
 
+@pytest.mark.parametrize(
+    ("api_class", "tournament"),
+    [
+        (numerapi.NumerAPI, 8),
+        (numerapi.SignalsAPI, 11),
+        (numerapi.CryptoAPI, 12),
+    ],
+)
+@pytest.mark.parametrize(
+    ("stake_value", "expected"),
+    [("14.63", decimal.Decimal("14.63")), (None, None)],
+)
+@responses.activate
+def test_stake_get_is_shared_across_tournaments(
+    api_class, tournament, stake_value, expected
+):
+    api = api_class()
+    assert api_class.stake_get is base_api.Api.stake_get
+    responses.add(
+        responses.POST,
+        base_api.API_TOURNAMENT_URL,
+        json={"data": {"v3UserProfile": {"stakeValue": stake_value}}},
+    )
+
+    assert api.stake_get("uuazed") == expected
+
+    request_body = json.loads(responses.calls[0].request.body)
+    assert "stakeValue" in request_body["query"]
+    assert "totalStake" not in request_body["query"]
+    assert request_body["variables"] == {
+        "model_name": "uuazed",
+        "tournament": tournament,
+    }
+
+
 @responses.activate
 def test_raw_query(api):
     query = "query {latestNmrPrice {priceUsd}}"

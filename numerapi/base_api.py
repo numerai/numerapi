@@ -1,6 +1,7 @@
-"""Parts of the API that is shared between Signals and Classic"""
+"""API functionality shared by Classic, Signals, and Crypto."""
 
 import datetime
+import decimal
 import logging
 import os
 import warnings
@@ -400,6 +401,33 @@ class Api:
         utils.replace(data, "startDate", utils.parse_datetime_string)
         utils.replace(data, "nmrStaked", utils.parse_float_string)
         return data
+
+    def stake_get(self, username: str) -> decimal.Decimal | None:
+        """Get the current stake for a model in this API's tournament.
+
+        Args:
+            username (str): model name
+
+        Returns:
+            decimal.Decimal or None: current stake, including projected NMR
+                earnings from open rounds, or None if the model has no stake
+
+        Example:
+            >>> SignalsAPI().stake_get("uuazed")
+            Decimal('14.63')
+        """
+        query = """
+          query($model_name: String!
+                $tournament: Int) {
+            v3UserProfile(model_name: $model_name
+                          tournament: $tournament) {
+              stakeValue
+            }
+          }
+        """
+        arguments = {"model_name": username, "tournament": self.tournament_id}
+        data = self.raw_query(query, arguments)["data"]["v3UserProfile"]
+        return utils.parse_float_string(data["stakeValue"])
 
     def get_models(self, tournament: int | None = None) -> Dict:
         """Get mapping of account model names to model ids for convenience

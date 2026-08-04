@@ -9,6 +9,8 @@ Notable changes to this project.
   until their scheduled removal in numerapi 3.0.0
 - document migration from legacy round multiplier roles and isolate the
   deprecated `round_model_performances_v2` behavior
+- expose the tournament-aware `stake_get` API consistently for Classic,
+  Signals, and Crypto
 
 ## [2.23.3] - 2026-06-30
 - fix `models_of_account` referencing incorrect type `Str!` instead of `String!`
