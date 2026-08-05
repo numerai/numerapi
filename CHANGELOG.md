@@ -1,6 +1,19 @@
 # Changelog
 Notable changes to this project.
 
+## [2.24.0] - 2026-08-03
+- add exact `roundScoreConfigs` identities, scoring windows, and payout settings
+  to `list_rounds` for Classic, Signals, and Crypto
+- stop querying deprecated GraphQL round multiplier fields; keep the six
+  established Corr/MMC return keys as exact-name compatibility projections
+  until their scheduled removal in numerapi 3.0.0
+- document migration from legacy round multiplier roles and isolate the
+  deprecated `round_model_performances_v2` behavior
+- expose the tournament-aware `stake_get` API consistently for Classic,
+  Signals, and Crypto
+- allow `download_dataset` to use pandas Parquet filters and download only the
+  matching portion of a dataset
+
 ## [2.23.3] - 2026-06-30
 - fix `models_of_account` referencing incorrect type `Str!` instead of `String!`
 

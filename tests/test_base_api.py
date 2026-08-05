@@ -2,9 +2,12 @@ import datetime
 import decimal
 import json
 import os
+from unittest.mock import MagicMock
+
 import pytest
 import responses
 
+import numerapi
 from numerapi import base_api
 
 
@@ -14,10 +17,105 @@ def api_fixture():
     return api
 
 
+def _round_score_config(
+    name,
+    *,
+    config_id=None,
+    display_name=None,
+    version="1",
+    is_payout=True,
+    multiplier=0.5,
+    round_number_start=100,
+):
+    config_id = config_id or f"{name}-{version}"
+    return {
+        "id": f"round-{config_id}",
+        "scoreConfigId": config_id,
+        "roundNumberStart": round_number_start,
+        "roundNumberEnd": None,
+        "name": name,
+        "version": version,
+        "displayName": display_name or name,
+        "totalScoreDays": 20,
+        "returnsLagDays": 2,
+        "dataDelayDays": 2,
+        "universe": "test-universe",
+        "isCanonScore": False,
+        "isPayout": is_payout,
+        "scoringStart": "2026-03-29",
+        "scoringEnd": "2026-04-18",
+        "minMultiplier": multiplier,
+        "maxMultiplier": multiplier,
+        "defaultMultiplier": multiplier,
+        "clipThreshold": 0.05,
+        "stakeThreshold": 100.0,
+        "payoutFactor": 1.0,
+    }
+
+
 def test_NumerAPI():
     # invalid log level should raise
     with pytest.raises(AttributeError):
         base_api.Api(verbosity="FOO")
+
+
+@responses.activate
+def test_download_dataset_uses_regular_download_without_filters(
+    api, tmp_path, monkeypatch
+):
+    dataset_url = "https://example.com/train.parquet"
+    responses.add(
+        responses.POST,
+        base_api.API_TOURNAMENT_URL,
+        json={"data": {"dataset": dataset_url}},
+    )
+    download_file = MagicMock()
+    monkeypatch.setattr(base_api.utils, "download_file", download_file)
+    dest_path = str(tmp_path / "train.parquet")
+
+    result = api.download_dataset("v4/train.parquet", dest_path)
+
+    assert result == dest_path
+    download_file.assert_called_once_with(dataset_url, dest_path, True)
+
+
+@responses.activate
+def test_download_dataset_reads_only_filtered_parquet_data(
+    api, tmp_path, monkeypatch
+):
+    dataset_url = "https://example.com/train.parquet"
+    responses.add(
+        responses.POST,
+        base_api.API_TOURNAMENT_URL,
+        json={"data": {"dataset": dataset_url}},
+    )
+    filters = [("era", "in", ["0001", "0002"])]
+    remote_file = object()
+    remote_context = MagicMock()
+    remote_context.__enter__.return_value = remote_file
+    fsspec_open = MagicMock(return_value=remote_context)
+    monkeypatch.setattr(base_api.fsspec, "open", fsspec_open)
+    filtered_dataset = MagicMock()
+    read_parquet = MagicMock(return_value=filtered_dataset)
+    monkeypatch.setattr(base_api.pd, "read_parquet", read_parquet)
+    replace = MagicMock()
+    monkeypatch.setattr(base_api.os, "replace", replace)
+    dest_path = str(tmp_path / "train_filtered.parquet")
+
+    result = api.download_dataset(
+        "v4/train.parquet", dest_path, filters=filters
+    )
+
+    assert result == dest_path
+    fsspec_open.assert_called_once_with(dataset_url, "rb")
+    read_parquet.assert_called_once_with(remote_file, filters=filters)
+    filtered_dataset.to_parquet.assert_called_once_with(dest_path + ".temp")
+    replace.assert_called_once_with(dest_path + ".temp", dest_path)
+
+
+def test_download_dataset_rejects_filters_for_non_parquet(api):
+    with pytest.raises(ValueError, match="only supported for Parquet"):
+        api.download_dataset("v4/features.json", filters=[("era", "=", "0001")])
 
 
 def test__login(api):
@@ -35,6 +133,41 @@ def test__login(api):
     os.environ["NUMERAI_PUBLIC_ID"] = "id"
     api._login()
     assert api.token == ("id", "key")
+
+
+@pytest.mark.parametrize(
+    ("api_class", "tournament"),
+    [
+        (numerapi.NumerAPI, 8),
+        (numerapi.SignalsAPI, 11),
+        (numerapi.CryptoAPI, 12),
+    ],
+)
+@pytest.mark.parametrize(
+    ("stake_value", "expected"),
+    [("14.63", decimal.Decimal("14.63")), (None, None)],
+)
+@responses.activate
+def test_stake_get_is_shared_across_tournaments(
+    api_class, tournament, stake_value, expected
+):
+    api = api_class()
+    assert api_class.stake_get is base_api.Api.stake_get
+    responses.add(
+        responses.POST,
+        base_api.API_TOURNAMENT_URL,
+        json={"data": {"v3UserProfile": {"stakeValue": stake_value}}},
+    )
+
+    assert api.stake_get("uuazed") == expected
+
+    request_body = json.loads(responses.calls[0].request.body)
+    assert "stakeValue" in request_body["query"]
+    assert "totalStake" not in request_body["query"]
+    assert request_body["variables"] == {
+        "model_name": "uuazed",
+        "tournament": tournament,
+    }
 
 
 @responses.activate
@@ -180,7 +313,21 @@ def test_submission_scores(api):
 
 @responses.activate
 def test_list_rounds(api):
-    api.tournament_id = 11
+    api.tournament_id = 8
+    configs = [
+        _round_score_config(
+            "correlation",
+            config_id="classic-corr",
+            display_name="v2_corr20",
+            multiplier=0.75,
+        ),
+        _round_score_config(
+            "meta_model_contribution",
+            config_id="classic-mmc",
+            display_name="mmc",
+            multiplier=2.25,
+        ),
+    ]
     data = {
         "data": {
             "rounds": [
@@ -198,13 +345,8 @@ def test_list_rounds(api):
                     "resolvedStaking": False,
                     "payoutFactor": "0.8",
                     "stakeThreshold": 0.1,
-                    "minCorrMultiplier": 0.0,
-                    "maxCorrMultiplier": 1.0,
-                    "defaultCorrMultiplier": 0.5,
-                    "minMmcMultiplier": 0.0,
-                    "maxMmcMultiplier": 1.0,
-                    "defaultMmcMultiplier": 0.5,
                     "dataDatestamp": 20260320,
+                    "roundScoreConfigs": configs,
                 }
             ]
         }
@@ -220,13 +362,204 @@ def test_list_rounds(api):
     assert isinstance(res[0]["scoreTime"], datetime.datetime)
     assert isinstance(res[0]["resolveTime"], datetime.datetime)
     assert isinstance(res[0]["payoutFactor"], decimal.Decimal)
+    assert isinstance(
+        res[0]["roundScoreConfigs"][0]["scoringStart"], datetime.datetime
+    )
+    assert isinstance(
+        res[0]["roundScoreConfigs"][0]["scoringEnd"], datetime.datetime
+    )
+    assert res[0]["roundScoreConfigs"][0]["scoreConfigId"] == "classic-corr"
+    assert res[0]["defaultCorrMultiplier"] == 0.75
+    assert res[0]["defaultMmcMultiplier"] == 2.25
 
     request_body = json.loads(responses.calls[0].request.body)
-    assert request_body["variables"]["tournament"] == 11
+    assert request_body["variables"]["tournament"] == 8
     assert request_body["variables"]["number"] == 123
     assert request_body["variables"]["target"] == "main"
     assert request_body["variables"]["status"] == "OPEN"
     assert request_body["variables"]["limit"] == 5
+    requested_fields = {
+        "id",
+        "scoreConfigId",
+        "roundNumberStart",
+        "roundNumberEnd",
+        "name",
+        "version",
+        "displayName",
+        "totalScoreDays",
+        "returnsLagDays",
+        "dataDelayDays",
+        "universe",
+        "isCanonScore",
+        "isPayout",
+        "scoringStart",
+        "scoringEnd",
+        "minMultiplier",
+        "maxMultiplier",
+        "defaultMultiplier",
+        "clipThreshold",
+        "stakeThreshold",
+        "payoutFactor",
+    }
+    assert "roundScoreConfigs" in request_body["query"]
+    assert all(field in request_body["query"] for field in requested_fields)
+    assert "minCorrMultiplier" not in request_body["query"]
+    assert "minMmcMultiplier" not in request_body["query"]
+
+
+@pytest.mark.parametrize(
+    ("api_class", "tournament", "score_names", "legacy_multipliers"),
+    [
+        (
+            numerapi.NumerAPI,
+            8,
+            ["correlation", "meta_model_contribution"],
+            (0.5, 0.5),
+        ),
+        (
+            numerapi.SignalsAPI,
+            11,
+            [
+                "alpha",
+                "v4_feature_neutral_correlation",
+                "meta_portfolio_contribution",
+            ],
+            (None, None),
+        ),
+        (
+            numerapi.CryptoAPI,
+            12,
+            ["correlation", "meta_model_contribution"],
+            (0.5, 0.5),
+        ),
+    ],
+)
+@responses.activate
+def test_list_rounds_preserves_tournament_score_identities(
+    api_class, tournament, score_names, legacy_multipliers
+):
+    api = api_class()
+    configs = [_round_score_config(name) for name in score_names]
+    responses.add(
+        responses.POST,
+        base_api.API_TOURNAMENT_URL,
+        json={"data": {"rounds": [{"roundScoreConfigs": configs}]}},
+    )
+
+    result = api.list_rounds()
+
+    returned_round = result[0]
+    assert [
+        config["name"] for config in returned_round["roundScoreConfigs"]
+    ] == score_names
+    assert returned_round["defaultCorrMultiplier"] == legacy_multipliers[0]
+    assert returned_round["defaultMmcMultiplier"] == legacy_multipliers[1]
+    request_body = json.loads(responses.calls[0].request.body)
+    assert request_body["variables"]["tournament"] == tournament
+
+
+@responses.activate
+def test_list_rounds_keeps_coexisting_and_unfamiliar_score_configs(api):
+    configs = [
+        _round_score_config("alpha", multiplier=0.3),
+        _round_score_config(
+            "correlation",
+            config_id="corr-old",
+            version="1",
+            multiplier=0.2,
+            round_number_start=100,
+        ),
+        _round_score_config(
+            "correlation",
+            config_id="corr-new",
+            version="2",
+            multiplier=0.4,
+            round_number_start=200,
+        ),
+        _round_score_config("meta_portfolio_contribution", multiplier=0.8),
+        _round_score_config("meta_model_contribution", multiplier=0.6),
+        _round_score_config("unfamiliar_score", multiplier=0.9),
+    ]
+    responses.add(
+        responses.POST,
+        base_api.API_TOURNAMENT_URL,
+        json={"data": {"rounds": [{"roundScoreConfigs": configs}]}},
+    )
+
+    returned_round = api.list_rounds()[0]
+
+    assert [
+        config["scoreConfigId"]
+        for config in returned_round["roundScoreConfigs"]
+    ] == [config["scoreConfigId"] for config in configs]
+    assert returned_round["defaultCorrMultiplier"] == 0.4
+    assert returned_round["defaultMmcMultiplier"] == 0.6
+
+
+@responses.activate
+def test_list_rounds_orders_numeric_score_versions_numerically(api):
+    configs = [
+        _round_score_config(
+            "correlation",
+            config_id="corr-9",
+            version="9",
+            multiplier=0.9,
+            round_number_start=200,
+        ),
+        _round_score_config(
+            "correlation",
+            config_id="corr-10",
+            version="10",
+            multiplier=1.0,
+            round_number_start=200,
+        ),
+    ]
+    responses.add(
+        responses.POST,
+        base_api.API_TOURNAMENT_URL,
+        json={"data": {"rounds": [{"roundScoreConfigs": configs}]}},
+    )
+
+    returned_round = api.list_rounds()[0]
+
+    assert [
+        returned_round["minCorrMultiplier"],
+        returned_round["maxCorrMultiplier"],
+        returned_round["defaultCorrMultiplier"],
+    ] == [1.0, 1.0, 1.0]
+
+
+@responses.activate
+def test_list_rounds_fails_closed_for_ambiguous_non_numeric_versions(api):
+    configs = [
+        _round_score_config(
+            "correlation",
+            config_id="corr-10",
+            version="10",
+            multiplier=1.0,
+            round_number_start=200,
+        ),
+        _round_score_config(
+            "correlation",
+            config_id="corr-next",
+            version="next",
+            multiplier=1.1,
+            round_number_start=200,
+        ),
+    ]
+    responses.add(
+        responses.POST,
+        base_api.API_TOURNAMENT_URL,
+        json={"data": {"rounds": [{"roundScoreConfigs": configs}]}},
+    )
+
+    returned_round = api.list_rounds()[0]
+
+    assert [
+        returned_round["minCorrMultiplier"],
+        returned_round["maxCorrMultiplier"],
+        returned_round["defaultCorrMultiplier"],
+    ] == [None, None, None]
 
 
 @responses.activate

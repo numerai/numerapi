@@ -39,6 +39,12 @@ and `NUMERAI_SECRET_KEY`).
     napi = numerapi.NumerAPI(verbosity="info")
     # download current dataset => also check `https://numer.ai/data`
     napi.download_dataset("v4/train.parquet", "train.parquet")
+    # use pandas filter syntax to download only selected parquet rows
+    napi.download_dataset(
+        "v4/train.parquet",
+        "train_eras_1_and_2.parquet",
+        filters=[("era", "in", ["0001", "0002"])],
+    )
     # get current leaderboard
     leaderboard = napi.get_leaderboard()
     # check if a new round has started

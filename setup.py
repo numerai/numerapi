@@ -5,8 +5,7 @@ def load(path):
     return open(path, "r").read()
 
 
-numerapi_version = "2.23.3"
-
+numerapi_version = "2.24.0"
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -41,6 +40,7 @@ if __name__ == "__main__":
             "python-dateutil",
             "tqdm>=4.29.1",
             "click>=7.0",
+            "fsspec[http]",
             "pandas>=1.1.0",
         ],
         entry_points={"console_scripts": ["numerapi = numerapi.cli:cli"]},

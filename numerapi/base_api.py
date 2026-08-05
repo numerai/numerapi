@@ -1,12 +1,14 @@
-"""Parts of the API that is shared between Signals and Classic"""
+"""API functionality shared by Classic, Signals, and Crypto."""
 
 import datetime
+import decimal
 import logging
 import os
 import warnings
 from io import BytesIO
 from typing import Dict, List, Tuple, Union
 
+import fsspec
 import pandas as pd
 import pytz
 import requests
@@ -176,7 +178,11 @@ class Api:
         return self.raw_query(query, args)["data"]["listDatasets"]
 
     def download_dataset(
-        self, filename: str, dest_path: str | None = None, round_num: int | None = None
+        self,
+        filename: str,
+        dest_path: str | None = None,
+        round_num: int | None = None,
+        filters: List[Tuple] | List[List[Tuple]] | None = None,
     ) -> str:
         """Download specified file for the given round.
 
@@ -186,14 +192,26 @@ class Api:
                 stored, defaults to the same name as the source file
             round_num (int, optional): tournament round you are interested in.
                 defaults to the current round
+            filters (list, optional): pandas ``read_parquet`` filters. When
+                provided, only matching Parquet data is read from the remote
+                dataset and written to ``dest_path``. See
+                :func:`pandas.read_parquet` for the supported filter syntax.
 
         Returns:
             str: path of the downloaded file
 
         Example:
             >>> filenames = NumerAPI().list_datasets()
-            >>> NumerAPI().download_dataset(filenames[0]}")
+            >>> NumerAPI().download_dataset(filenames[0])
+            >>> NumerAPI().download_dataset(
+            ...     "v4/train.parquet",
+            ...     "train_eras_1_and_2.parquet",
+            ...     filters=[("era", "in", ["0001", "0002"])],
+            ... )
         """
+        if filters is not None and not filename.lower().endswith(".parquet"):
+            raise ValueError("filters are only supported for Parquet datasets")
+
         if dest_path is None:
             dest_path = filename
 
@@ -221,7 +239,21 @@ class Api:
         }
 
         dataset_url = self.raw_query(query, args)["data"]["dataset"]
-        utils.download_file(dataset_url, dest_path, self.show_progress_bars)
+        if filters is None:
+            utils.download_file(
+                dataset_url, dest_path, self.show_progress_bars
+            )
+        else:
+            temp_path = dest_path + ".temp"
+            try:
+                with fsspec.open(dataset_url, "rb") as dataset_file:
+                    dataset = pd.read_parquet(dataset_file, filters=filters)
+                dataset.to_parquet(temp_path)
+                os.replace(temp_path, dest_path)
+            except Exception:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                raise
         return dest_path
 
     def set_global_data_dir(self, directory: str):
@@ -348,6 +380,85 @@ class Api:
             item["displayName"]: item["id"]
             for item in sorted(data, key=lambda x: x["displayName"])
         }
+
+    def public_user_profile(self, username: str) -> Dict:
+        """Fetch the public profile of a user / model.
+
+        The model is resolved within this API's tournament
+        (``self.tournament_id``), so the returned ``id`` is the model UUID
+        for *this* tournament. That id is what e.g. :meth:`submission_scores`
+        expects as ``model_id``. This works identically for Numerai Classic,
+        Signals and Crypto - the only difference is the tournament the
+        concrete API class is configured for.
+
+        Args:
+            username (str): the model name (called "username" on the
+                Crypto / Signals leaderboards)
+
+        Returns:
+            dict: user profile including the following fields:
+
+                * username (`str`)
+                * startDate (`datetime`)
+                * id (`str`) - the model UUID, usable as `model_id`
+                * bio (`str`)
+                * nmrStaked (`decimal.Decimal`)
+
+        Example:
+            >>> api = CryptoAPI()
+            >>> api.public_user_profile("quixotic15")
+            {'bio': None,
+             'id': '0c58da1a-8df4-4e98-a99a-71a12fbbe36b',
+             'startDate': datetime.datetime(2024, 11, 28, ...),
+             'nmrStaked': None,
+             'username': 'quixotic15'}
+        """
+        query = """
+          query($model_name: String!
+                $tournament: Int) {
+            v3UserProfile(model_name: $model_name
+                          tournament: $tournament) {
+              id
+              startDate
+              username
+              bio
+              nmrStaked
+            }
+          }
+        """
+        arguments = {"model_name": username, "tournament": self.tournament_id}
+        data = self.raw_query(query, arguments)["data"]["v3UserProfile"]
+        # convert strings to python objects
+        utils.replace(data, "startDate", utils.parse_datetime_string)
+        utils.replace(data, "nmrStaked", utils.parse_float_string)
+        return data
+
+    def stake_get(self, username: str) -> decimal.Decimal | None:
+        """Get the current stake for a model in this API's tournament.
+
+        Args:
+            username (str): model name
+
+        Returns:
+            decimal.Decimal or None: current stake, including projected NMR
+                earnings from open rounds, or None if the model has no stake
+
+        Example:
+            >>> SignalsAPI().stake_get("uuazed")
+            Decimal('14.63')
+        """
+        query = """
+          query($model_name: String!
+                $tournament: Int) {
+            v3UserProfile(model_name: $model_name
+                          tournament: $tournament) {
+              stakeValue
+            }
+          }
+        """
+        arguments = {"model_name": username, "tournament": self.tournament_id}
+        data = self.raw_query(query, arguments)["data"]["v3UserProfile"]
+        return utils.parse_float_string(data["stakeValue"])
 
     def get_models(self, tournament: int | None = None) -> Dict:
         """Get mapping of account model names to model ids for convenience
@@ -637,7 +748,16 @@ class Api:
             limit (int, optional): maximum number of rounds to return
 
         Returns:
-            list of dicts: round entries matching the provided filters
+            list of dicts: round entries matching the provided filters. Each
+            entry includes ``roundScoreConfigs``, whose items retain the exact
+            score identity and per-round payout settings returned by the API.
+
+            The legacy ``minCorrMultiplier`` through
+            ``defaultMmcMultiplier`` keys remain until numerapi 3.0.0. They are
+            compatibility projections of payout configs whose names are
+            exactly ``correlation`` or ``meta_model_contribution``; they are
+            ``None`` when no such payout config exists. Use
+            ``roundScoreConfigs`` for all new integrations.
         """
         query = """
             query($tournament: Int
@@ -663,13 +783,30 @@ class Api:
                 resolvedStaking
                 payoutFactor
                 stakeThreshold
-                minCorrMultiplier
-                maxCorrMultiplier
-                defaultCorrMultiplier
-                minMmcMultiplier
-                maxMmcMultiplier
-                defaultMmcMultiplier
                 dataDatestamp
+                roundScoreConfigs {
+                  id
+                  scoreConfigId
+                  roundNumberStart
+                  roundNumberEnd
+                  name
+                  version
+                  displayName
+                  totalScoreDays
+                  returnsLagDays
+                  dataDelayDays
+                  universe
+                  isCanonScore
+                  isPayout
+                  scoringStart
+                  scoringEnd
+                  minMultiplier
+                  maxMultiplier
+                  defaultMultiplier
+                  clipThreshold
+                  stakeThreshold
+                  payoutFactor
+                }
               }
             }
         """
@@ -691,7 +828,63 @@ class Api:
             ]:
                 utils.replace(round_info, field, utils.parse_datetime_string)
             utils.replace(round_info, "payoutFactor", utils.parse_float_string)
+            for config in round_info["roundScoreConfigs"]:
+                utils.replace(
+                    config, "scoringStart", utils.parse_datetime_string
+                )
+                utils.replace(
+                    config, "scoringEnd", utils.parse_datetime_string
+                )
+            self._add_legacy_round_multipliers(round_info)
         return rounds
+
+    @staticmethod
+    def _add_legacy_round_multipliers(round_info: dict) -> None:
+        """Add deprecated, identity-safe round multiplier projections."""
+        legacy_scores = {
+            "Corr": "correlation",
+            "Mmc": "meta_model_contribution",
+        }
+        multiplier_fields = {
+            "min": "minMultiplier",
+            "max": "maxMultiplier",
+            "default": "defaultMultiplier",
+        }
+
+        for legacy_name, score_name in legacy_scores.items():
+            matches = [
+                config
+                for config in round_info["roundScoreConfigs"]
+                if config["isPayout"] and config["name"] == score_name
+            ]
+            config = Api._select_legacy_round_config(matches)
+            for prefix, config_field in multiplier_fields.items():
+                field = f"{prefix}{legacy_name}Multiplier"
+                round_info[field] = (
+                    None if config is None else config[config_field]
+                )
+
+    @staticmethod
+    def _select_legacy_round_config(configs: List[Dict]) -> Dict | None:
+        """Select the latest config, failing closed on ambiguous versions."""
+        if not configs:
+            return None
+
+        latest_start = max(item["roundNumberStart"] for item in configs)
+        candidates = [
+            item for item in configs if item["roundNumberStart"] == latest_start
+        ]
+        if len(candidates) == 1:
+            return candidates[0]
+
+        try:
+            return max(
+                candidates,
+                key=lambda item: (int(item["version"]), item["id"]),
+            )
+        except (TypeError, ValueError):
+            # A future non-numeric version contract cannot be ordered safely.
+            return None
 
     def set_bio(self, model_id: str, bio: str) -> bool:
         """Set bio field for a model id.
