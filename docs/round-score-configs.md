@@ -21,7 +21,7 @@ Each item includes:
 consistent with other date fields in numerapi. GraphQL float and integer fields
 retain their normal Python JSON types.
 
-## Migrating from legacy multiplier keys
+## Legacy multiplier keys removed in 3.0.0
 
 Before 2.24.0, `list_rounds()` requested server compatibility fields. For a
 Signals round, a response could look like this even though the payout scores
@@ -34,8 +34,8 @@ were Alpha and MPC:
 }
 ```
 
-In 2.24.0 the exact identities are available without knowing score names in
-advance:
+In 3.0.0, the exact identities are the only payout configuration returned by
+`list_rounds()`:
 
 ```python
 {
@@ -57,29 +57,16 @@ advance:
             "isPayout": True,
             "defaultMultiplier": 0.8,
         },
-    ],
-    "defaultCorrMultiplier": None,
-    "defaultMmcMultiplier": None,
+    ]
 }
 ```
 
-The six established Corr/MMC keys (`min`, `max`, and `default` for each) stay
-in the returned round dictionary throughout numerapi 2.x. They are now
-identity-safe projections: Corr keys select only a payout config whose `name`
-is exactly `correlation`, MMC keys select only a payout config whose `name` is
-exactly `meta_model_contribution`, and the keys are `None` when there is no
-exact match. Alpha and FNC are never projected as Corr; MPC is never projected
-as MMC. If multiple exact payout configs exist, the projection uses the config
-with the newest `roundNumberStart`, then compares the numeric `version` values
-as integers and uses `id` for a numeric-version tie. If multiple configs at the
-newest start contain a non-numeric future version, the compatibility keys are
-`None` rather than guessing an order. The complete list remains available
-unchanged in either case.
-
-These six compatibility keys are scheduled for removal in numerapi 3.0.0.
-`list_rounds()` never exposed the three legacy TC multiplier fields, so this
-migration does not introduce them. Code should migrate now by filtering
-`roundScoreConfigs`, normally starting with `isPayout`.
+The six Corr/MMC compatibility keys (`min`, `max`, and `default` for each) are
+no longer added to the returned round dictionary. `list_rounds()` never
+exposed the three legacy TC multiplier fields. Code should filter
+`roundScoreConfigs`, normally starting with `isPayout`, and preserve each
+configuration's `name`, `version`, and `scoreConfigId` rather than projecting
+different scores into Corr or MMC roles.
 
 ## Deprecated performance endpoint
 
