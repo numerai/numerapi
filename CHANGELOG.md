@@ -1,11 +1,6 @@
 # Changelog
 Notable changes to this project.
 
-## [2.24.0.dev1] - 2026-08-05
-
-- allow `download_dataset` to use pandas Parquet filters and download only the
-  matching portion of a dataset
-
 ## [2.24.0] - 2026-08-03
 - add exact `roundScoreConfigs` identities, scoring windows, and payout settings
   to `list_rounds` for Classic, Signals, and Crypto
@@ -16,6 +11,8 @@ Notable changes to this project.
   deprecated `round_model_performances_v2` behavior
 - expose the tournament-aware `stake_get` API consistently for Classic,
   Signals, and Crypto
+- allow `download_dataset` to use pandas Parquet filters and download only the
+  matching portion of a dataset
 
 ## [2.23.3] - 2026-06-30
 - fix `models_of_account` referencing incorrect type `Str!` instead of `String!`
