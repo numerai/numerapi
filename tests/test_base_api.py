@@ -2,6 +2,8 @@ import datetime
 import decimal
 import json
 import os
+from unittest.mock import MagicMock
+
 import pytest
 import responses
 
@@ -55,6 +57,65 @@ def test_NumerAPI():
     # invalid log level should raise
     with pytest.raises(AttributeError):
         base_api.Api(verbosity="FOO")
+
+
+@responses.activate
+def test_download_dataset_uses_regular_download_without_filters(
+    api, tmp_path, monkeypatch
+):
+    dataset_url = "https://example.com/train.parquet"
+    responses.add(
+        responses.POST,
+        base_api.API_TOURNAMENT_URL,
+        json={"data": {"dataset": dataset_url}},
+    )
+    download_file = MagicMock()
+    monkeypatch.setattr(base_api.utils, "download_file", download_file)
+    dest_path = str(tmp_path / "train.parquet")
+
+    result = api.download_dataset("v4/train.parquet", dest_path)
+
+    assert result == dest_path
+    download_file.assert_called_once_with(dataset_url, dest_path, True)
+
+
+@responses.activate
+def test_download_dataset_reads_only_filtered_parquet_data(
+    api, tmp_path, monkeypatch
+):
+    dataset_url = "https://example.com/train.parquet"
+    responses.add(
+        responses.POST,
+        base_api.API_TOURNAMENT_URL,
+        json={"data": {"dataset": dataset_url}},
+    )
+    filters = [("era", "in", ["0001", "0002"])]
+    remote_file = object()
+    remote_context = MagicMock()
+    remote_context.__enter__.return_value = remote_file
+    fsspec_open = MagicMock(return_value=remote_context)
+    monkeypatch.setattr(base_api.fsspec, "open", fsspec_open)
+    filtered_dataset = MagicMock()
+    read_parquet = MagicMock(return_value=filtered_dataset)
+    monkeypatch.setattr(base_api.pd, "read_parquet", read_parquet)
+    replace = MagicMock()
+    monkeypatch.setattr(base_api.os, "replace", replace)
+    dest_path = str(tmp_path / "train_filtered.parquet")
+
+    result = api.download_dataset(
+        "v4/train.parquet", dest_path, filters=filters
+    )
+
+    assert result == dest_path
+    fsspec_open.assert_called_once_with(dataset_url, "rb")
+    read_parquet.assert_called_once_with(remote_file, filters=filters)
+    filtered_dataset.to_parquet.assert_called_once_with(dest_path + ".temp")
+    replace.assert_called_once_with(dest_path + ".temp", dest_path)
+
+
+def test_download_dataset_rejects_filters_for_non_parquet(api):
+    with pytest.raises(ValueError, match="only supported for Parquet"):
+        api.download_dataset("v4/features.json", filters=[("era", "=", "0001")])
 
 
 def test__login(api):

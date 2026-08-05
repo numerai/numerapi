@@ -1,6 +1,11 @@
 # Changelog
 Notable changes to this project.
 
+## [2.24.0.dev1] - 2026-08-05
+
+- allow `download_dataset` to use pandas Parquet filters and download only the
+  matching portion of a dataset
+
 ## [2.24.0] - 2026-08-03
 - add exact `roundScoreConfigs` identities, scoring windows, and payout settings
   to `list_rounds` for Classic, Signals, and Crypto

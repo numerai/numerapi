@@ -3,4 +3,5 @@ python-dateutil
 pytz
 tqdm>=4.29.1
 click>=7.0
+fsspec[http]
 pandas>=1.1.0

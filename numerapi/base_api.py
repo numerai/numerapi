@@ -8,6 +8,7 @@ import warnings
 from io import BytesIO
 from typing import Dict, List, Tuple, Union
 
+import fsspec
 import pandas as pd
 import pytz
 import requests
@@ -177,7 +178,11 @@ class Api:
         return self.raw_query(query, args)["data"]["listDatasets"]
 
     def download_dataset(
-        self, filename: str, dest_path: str | None = None, round_num: int | None = None
+        self,
+        filename: str,
+        dest_path: str | None = None,
+        round_num: int | None = None,
+        filters: List[Tuple] | List[List[Tuple]] | None = None,
     ) -> str:
         """Download specified file for the given round.
 
@@ -187,14 +192,26 @@ class Api:
                 stored, defaults to the same name as the source file
             round_num (int, optional): tournament round you are interested in.
                 defaults to the current round
+            filters (list, optional): pandas ``read_parquet`` filters. When
+                provided, only matching Parquet data is read from the remote
+                dataset and written to ``dest_path``. See
+                :func:`pandas.read_parquet` for the supported filter syntax.
 
         Returns:
             str: path of the downloaded file
 
         Example:
             >>> filenames = NumerAPI().list_datasets()
-            >>> NumerAPI().download_dataset(filenames[0]}")
+            >>> NumerAPI().download_dataset(filenames[0])
+            >>> NumerAPI().download_dataset(
+            ...     "v4/train.parquet",
+            ...     "train_eras_1_and_2.parquet",
+            ...     filters=[("era", "in", ["0001", "0002"])],
+            ... )
         """
+        if filters is not None and not filename.lower().endswith(".parquet"):
+            raise ValueError("filters are only supported for Parquet datasets")
+
         if dest_path is None:
             dest_path = filename
 
@@ -222,7 +239,21 @@ class Api:
         }
 
         dataset_url = self.raw_query(query, args)["data"]["dataset"]
-        utils.download_file(dataset_url, dest_path, self.show_progress_bars)
+        if filters is None:
+            utils.download_file(
+                dataset_url, dest_path, self.show_progress_bars
+            )
+        else:
+            temp_path = dest_path + ".temp"
+            try:
+                with fsspec.open(dataset_url, "rb") as dataset_file:
+                    dataset = pd.read_parquet(dataset_file, filters=filters)
+                dataset.to_parquet(temp_path)
+                os.replace(temp_path, dest_path)
+            except Exception:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                raise
         return dest_path
 
     def set_global_data_dir(self, directory: str):
