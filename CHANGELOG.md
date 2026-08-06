@@ -1,6 +1,10 @@
 # Changelog
 Notable changes to this project.
 
+## [3.0.0] - Unreleased
+- remove the six deprecated Corr/MMC multiplier projections from
+  `list_rounds`; use the identity-preserving `roundScoreConfigs` list instead
+
 ## [2.24.0] - 2026-08-03
 - add exact `roundScoreConfigs` identities, scoring windows, and payout settings
   to `list_rounds` for Classic, Signals, and Crypto
