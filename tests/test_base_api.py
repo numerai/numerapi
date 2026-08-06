@@ -369,8 +369,14 @@ def test_list_rounds(api):
         res[0]["roundScoreConfigs"][0]["scoringEnd"], datetime.datetime
     )
     assert res[0]["roundScoreConfigs"][0]["scoreConfigId"] == "classic-corr"
-    assert res[0]["defaultCorrMultiplier"] == 0.75
-    assert res[0]["defaultMmcMultiplier"] == 2.25
+    assert not {
+        "minCorrMultiplier",
+        "maxCorrMultiplier",
+        "defaultCorrMultiplier",
+        "minMmcMultiplier",
+        "maxMmcMultiplier",
+        "defaultMmcMultiplier",
+    }.intersection(res[0])
 
     request_body = json.loads(responses.calls[0].request.body)
     assert request_body["variables"]["tournament"] == 8
@@ -403,18 +409,23 @@ def test_list_rounds(api):
     }
     assert "roundScoreConfigs" in request_body["query"]
     assert all(field in request_body["query"] for field in requested_fields)
-    assert "minCorrMultiplier" not in request_body["query"]
-    assert "minMmcMultiplier" not in request_body["query"]
+    assert not {
+        "minCorrMultiplier",
+        "maxCorrMultiplier",
+        "defaultCorrMultiplier",
+        "minMmcMultiplier",
+        "maxMmcMultiplier",
+        "defaultMmcMultiplier",
+    }.intersection(request_body["query"].split())
 
 
 @pytest.mark.parametrize(
-    ("api_class", "tournament", "score_names", "legacy_multipliers"),
+    ("api_class", "tournament", "score_names"),
     [
         (
             numerapi.NumerAPI,
             8,
             ["correlation", "meta_model_contribution"],
-            (0.5, 0.5),
         ),
         (
             numerapi.SignalsAPI,
@@ -424,19 +435,17 @@ def test_list_rounds(api):
                 "v4_feature_neutral_correlation",
                 "meta_portfolio_contribution",
             ],
-            (None, None),
         ),
         (
             numerapi.CryptoAPI,
             12,
             ["correlation", "meta_model_contribution"],
-            (0.5, 0.5),
         ),
     ],
 )
 @responses.activate
 def test_list_rounds_preserves_tournament_score_identities(
-    api_class, tournament, score_names, legacy_multipliers
+    api_class, tournament, score_names
 ):
     api = api_class()
     configs = [_round_score_config(name) for name in score_names]
@@ -452,8 +461,6 @@ def test_list_rounds_preserves_tournament_score_identities(
     assert [
         config["name"] for config in returned_round["roundScoreConfigs"]
     ] == score_names
-    assert returned_round["defaultCorrMultiplier"] == legacy_multipliers[0]
-    assert returned_round["defaultMmcMultiplier"] == legacy_multipliers[1]
     request_body = json.loads(responses.calls[0].request.body)
     assert request_body["variables"]["tournament"] == tournament
 
@@ -492,74 +499,6 @@ def test_list_rounds_keeps_coexisting_and_unfamiliar_score_configs(api):
         config["scoreConfigId"]
         for config in returned_round["roundScoreConfigs"]
     ] == [config["scoreConfigId"] for config in configs]
-    assert returned_round["defaultCorrMultiplier"] == 0.4
-    assert returned_round["defaultMmcMultiplier"] == 0.6
-
-
-@responses.activate
-def test_list_rounds_orders_numeric_score_versions_numerically(api):
-    configs = [
-        _round_score_config(
-            "correlation",
-            config_id="corr-9",
-            version="9",
-            multiplier=0.9,
-            round_number_start=200,
-        ),
-        _round_score_config(
-            "correlation",
-            config_id="corr-10",
-            version="10",
-            multiplier=1.0,
-            round_number_start=200,
-        ),
-    ]
-    responses.add(
-        responses.POST,
-        base_api.API_TOURNAMENT_URL,
-        json={"data": {"rounds": [{"roundScoreConfigs": configs}]}},
-    )
-
-    returned_round = api.list_rounds()[0]
-
-    assert [
-        returned_round["minCorrMultiplier"],
-        returned_round["maxCorrMultiplier"],
-        returned_round["defaultCorrMultiplier"],
-    ] == [1.0, 1.0, 1.0]
-
-
-@responses.activate
-def test_list_rounds_fails_closed_for_ambiguous_non_numeric_versions(api):
-    configs = [
-        _round_score_config(
-            "correlation",
-            config_id="corr-10",
-            version="10",
-            multiplier=1.0,
-            round_number_start=200,
-        ),
-        _round_score_config(
-            "correlation",
-            config_id="corr-next",
-            version="next",
-            multiplier=1.1,
-            round_number_start=200,
-        ),
-    ]
-    responses.add(
-        responses.POST,
-        base_api.API_TOURNAMENT_URL,
-        json={"data": {"rounds": [{"roundScoreConfigs": configs}]}},
-    )
-
-    returned_round = api.list_rounds()[0]
-
-    assert [
-        returned_round["minCorrMultiplier"],
-        returned_round["maxCorrMultiplier"],
-        returned_round["defaultCorrMultiplier"],
-    ] == [None, None, None]
 
 
 @responses.activate
