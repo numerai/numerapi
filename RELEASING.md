@@ -21,8 +21,8 @@ Two rules explain everything else:
 | `<user>/<topic>` | all work; branch off `preview` |
 | `preview` | integration branch; **beta** releases are cut here |
 | `master` | released state; **final** releases are cut here |
-| `vX.Y.Z.devN` tag | publishes a pre-release |
-| `vX.Y.Z` tag | publishes a final release |
+| `X.Y.Z.devN` tag | publishes a pre-release |
+| `X.Y.Z` tag | publishes a final release |
 
 Nothing publishes on a branch push. Only pushing a tag publishes.
 
@@ -34,8 +34,9 @@ Nothing publishes on a branch push. Only pushing a tag publishes.
 
 ## Conventions
 
-- Tags are `v`-prefixed and must match `setup.py` exactly: `v3.2.0`,
-  `v3.2.0.dev0`. CI rejects a mismatch.
+- **Tags are bare version numbers and must match `setup.py` exactly:** `3.2.0`,
+  `3.2.0.dev0`. A `v` prefix is not allowed — CI rejects `v3.2.0` with an
+  explicit error.
 - Use the canonical PEP 440 spelling with the dot: `3.2.0.dev0`, not `3.2.0dev0`.
   Both normalize to the same release, but the canonical form avoids confusion.
 - Pre-releases use `.devN`. Increment `N` for each beta on the same version line.
@@ -71,8 +72,8 @@ git commit -am "numerapi 3.2.0.dev0"
 git push origin preview          # publishes nothing
 
 # 3. tag and push — this is the release event
-git tag v3.2.0.dev0
-git push origin v3.2.0.dev0
+git tag 3.2.0.dev0
+git push origin 3.2.0.dev0
 ```
 
 Verify:
@@ -110,8 +111,8 @@ gh pr merge <n> --merge
 # 4. tag master
 git checkout master && git pull
 grep numerapi_version setup.py                   # must read exactly 3.2.0
-git tag v3.2.0
-git push origin v3.2.0
+git tag 3.2.0
+git push origin 3.2.0
 
 # 5. keep preview caught up so it does not drift
 git checkout preview && git merge master && git push origin preview
@@ -135,7 +136,7 @@ git checkout -b hotfix/3.2.1 master     # branch off master, NOT preview
 gh pr create --base master
 # after merge:
 git checkout master && git pull
-git tag v3.2.1 && git push origin v3.2.1
+git tag 3.2.1 && git push origin 3.2.1
 git checkout preview && git merge master && git push origin preview
 ```
 
@@ -145,7 +146,7 @@ Read the Docs is fully automatic — there is nothing to tag or move.
 
 - `/en/latest/` tracks `master`.
 - `/en/stable/` tracks the greatest **non-pre-release** semver tag, so cutting
-  `v3.2.0` promotes it; `v3.2.0.dev0` is correctly ignored.
+  `3.2.0` promotes it; `3.2.0.dev0` is correctly ignored.
 
 Do not create a tag or branch named `stable`. That overrides the automatic
 behavior above, has to be force-moved by hand on every release, and silently goes
@@ -156,13 +157,15 @@ matters, cut a patch release.
 
 ## What CI enforces
 
-`.github/workflows/pypi.yml` runs on tag pushes matching `v[0-9]*` and will
-refuse to publish unless:
+`.github/workflows/pypi.yml` runs on tag pushes that start with a digit (and on
+`v`-prefixed tags, solely to reject them). It refuses to publish unless:
 
-1. **The tag matches `setup.py`.** Compared as normalized PEP 440 versions, so
-   `v3.2.0dev0` and `v3.2.0.dev0` are equivalent, but `v3.2.0` against a
-   `setup.py` of `3.2.0.dev0` fails.
-2. **Final releases point at a commit on `master`.** Pre-releases skip this
+1. **The tag has no `v` prefix.** `v3.2.0` fails with an error telling you to
+   re-tag as `3.2.0`.
+2. **The tag matches `setup.py`.** Compared as normalized PEP 440 versions, so
+   `3.2.0dev0` and `3.2.0.dev0` are equivalent, but `3.2.0` against a `setup.py`
+   of `3.2.0.dev0` fails.
+3. **Final releases point at a commit on `master`.** Pre-releases skip this
    check, so betas can be cut from `preview` but a final one cannot.
 
 `pytest.yml` (Python 3.10–3.14) and `ruff.yml` run on every push and PR.
@@ -175,14 +178,14 @@ release on PyPI either.
 
 **Tag mismatch error.** You tagged without bumping `setup.py`, or vice versa. Fix
 `setup.py`, commit, delete the tag locally and on origin
-(`git push origin :refs/tags/vX.Y.Z`), then re-tag. Deleting a tag never
-publishes anything.
+(`git push origin :refs/tags/X.Y.Z`), then re-tag. Deleting a tag never publishes
+anything.
 
 **"Final release tags must point at a commit on master."** You tagged a
 suffix-free version on `preview`. Either merge to `master` first, or cut it as a
 `.devN` pre-release instead.
 
-**Do not retro-tag old releases.** Any new tag matching `v[0-9]*` triggers a
+**Do not retro-tag old releases.** Any new tag starting with a digit triggers a
 publish attempt that will fail on a duplicate version. Historical tags are
 inconsistent (some `v`-prefixed, some not, several `.devN` tags that published
 final versions before the guards existed) — leave them as they are.

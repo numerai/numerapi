@@ -3,8 +3,10 @@ name: Upload Python Package
 on:
   push:
     tags:
-      # Version tags only. Non-version tags such as `stable` (the Read the Docs
-      # pointer) must never trigger a publish.
+      # Release tags are bare version numbers: 3.1.2, 3.1.2.dev0
+      - "[0-9]*"
+      # A `v` prefix is NOT a valid release tag. It is matched here only so the
+      # job can fail with an explanatory error instead of silently doing nothing.
       - "v[0-9]*"
 
 jobs:
@@ -26,7 +28,7 @@ jobs:
           pip install
           build wheel packaging
           --user
-      - name: Verify tag matches setup.py version
+      - name: Verify tag format and version match
         env:
           TAG_NAME: ${{ github.ref_name }}
         run: |
@@ -37,7 +39,12 @@ jobs:
           import sys
           from packaging.version import Version
 
-          tag = os.environ["TAG_NAME"].removeprefix("v")
+          tag = os.environ["TAG_NAME"]
+          if tag.startswith("v"):
+              sys.exit(
+                  f"::error::Release tags must be bare version numbers. "
+                  f"`{tag}` has a `v` prefix; delete it and tag `{tag[1:]}` instead."
+              )
           pkg = re.search(
               r'numerapi_version\s*=\s*"([^"]+)"',
               pathlib.Path("setup.py").read_text(),
@@ -45,8 +52,7 @@ jobs:
           print(f"tag={tag} setup.py={pkg}")
           if Version(tag) != Version(pkg):
               sys.exit(
-                  f"::error::Tag {os.environ['TAG_NAME']} does not match "
-                  f"setup.py numerapi_version={pkg}"
+                  f"::error::Tag {tag} does not match setup.py numerapi_version={pkg}"
               )
           print(f"::notice::publishing numerapi {Version(pkg)}")
           PY
@@ -58,7 +64,7 @@ jobs:
           import os
           from packaging.version import Version
 
-          print("yes" if Version(os.environ["TAG_NAME"].removeprefix("v")).is_prerelease else "no")
+          print("yes" if Version(os.environ["TAG_NAME"]).is_prerelease else "no")
           PY
           if [ "$(cat prerelease.txt)" = "no" ]; then
             git fetch --no-tags --quiet origin master
