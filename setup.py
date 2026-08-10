@@ -29,7 +29,7 @@ if __name__ == "__main__":
         name="numerapi",
         version=numerapi_version,
         maintainer="Numerai",
-        maintainer_email="support@gmail.com",
+        maintainer_email="tournament@numer.ai",
         description="Automatically download and upload data for the Numerai machine learning competition",
         long_description=load("README.md"),
         long_description_content_type="text/markdown",
