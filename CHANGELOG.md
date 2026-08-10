@@ -1,7 +1,14 @@
 # Changelog
 Notable changes to this project.
 
-## [3.0.0] - Unreleased
+## [3.1.2] - Unreleased
+- support Python 3.14 and pandas 3: require `pandas>=2.3.3` on Python 3.14 and
+  keep `pandas>=1.1.0` below it
+- declare `python_requires>=3.10` and advertise Python 3.10 through 3.14
+- 3.1.0 and 3.1.1 were never released; 3.1.0 was published briefly and
+  withdrawn from PyPI
+
+## [3.0.0] - 2026-08-07
 - remove the six deprecated Corr/MMC multiplier projections from
   `list_rounds`; use the identity-preserving `roundScoreConfigs` list instead
 
