@@ -3,4 +3,5 @@ pytest-cov
 codecov
 responses
 flake8
-pandas>=1.1.0
+pandas>=1.1.0; python_version < "3.14"
+pandas>=2.3.3; python_version >= "3.14"

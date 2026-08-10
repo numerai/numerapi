@@ -4,4 +4,5 @@ pytz
 tqdm>=4.29.1
 click>=7.0
 fsspec[http]
-pandas>=1.1.0
+pandas>=1.1.0; python_version < "3.14"
+pandas>=2.3.3; python_version >= "3.14"
