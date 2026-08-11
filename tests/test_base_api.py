@@ -572,8 +572,16 @@ def test_round_model_performances_v2_warns(api):
             "v2RoundModelPerformances": [
                 {
                     "atRisk": "10.5",
-                    "corrMultiplier": 1.0,
-                    "mmcMultiplier": 0.5,
+                    "payoutMultipliers": [
+                        {
+                            "id": "round-score-config-id",
+                            "scoreConfigId": "score-config-id",
+                            "name": "unfamiliar_score",
+                            "version": "7",
+                            "displayName": "unfamiliar",
+                            "multiplier": 0.5,
+                        }
+                    ],
                     "roundPayoutFactor": "0.8",
                     "roundNumber": 456,
                     "roundOpenTime": "2026-03-01T00:00:00Z",
@@ -605,6 +613,21 @@ def test_round_model_performances_v2_warns(api):
     assert isinstance(res[0]["roundOpenTime"], datetime.datetime)
     assert isinstance(res[0]["roundResolveTime"], datetime.datetime)
     assert res[0]["submissionScores"][0]["payoutPending"] == decimal.Decimal("0.8")
+    assert res[0]["payoutMultipliers"] == [
+        {
+            "id": "round-score-config-id",
+            "scoreConfigId": "score-config-id",
+            "name": "unfamiliar_score",
+            "version": "7",
+            "displayName": "unfamiliar",
+            "multiplier": 0.5,
+        }
+    ]
+
+    query = json.loads(responses.calls[0].request.body)["query"]
+    assert "payoutMultipliers" in query
+    assert "corrMultiplier" not in query
+    assert "mmcMultiplier" not in query
 
 
 @responses.activate

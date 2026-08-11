@@ -71,9 +71,10 @@ different scores into Corr or MMC roles.
 ## Deprecated performance endpoint
 
 `round_model_performances_v2()` remains an isolated deprecated compatibility
-method. Its `corrMultiplier` and `mmcMultiplier` fields come from the deprecated
-`v2RoundModelPerformances` GraphQL endpoint and must not be used to infer score
-identity. Use `submission_scores()` for identity-preserving score results and
-join them to `list_rounds()` by round when payout configuration is needed.
-Neither performance method nor `list_rounds()` has a dedicated CLI command, so
-there is no CLI return shape to migrate.
+method. It returns the GraphQL endpoint's exact `payoutMultipliers` list; each
+entry includes round-score-config and score-config IDs, name, version, display
+name, and multiplier. The legacy `corrMultiplier` and `mmcMultiplier` keys no
+longer exist. Use `submission_scores()` when payout configuration is not needed,
+or join results to `list_rounds()` by round. Neither performance method nor
+`list_rounds()` has a dedicated CLI command, so there is no CLI return shape to
+migrate.

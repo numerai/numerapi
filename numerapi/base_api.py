@@ -1405,8 +1405,13 @@ class Api:
             content:
 
                 * atRisk (`float`)
-                * corrMultiplier (`float` or None)
-                * mmcMultiplier (`float` or None)
+                * payoutMultipliers (`list`): exact payout score configurations
+                    * id (`str`): round score configuration ID
+                    * scoreConfigId (`str`): score configuration ID
+                    * name (`str`)
+                    * version (`str`)
+                    * displayName (`str`)
+                    * multiplier (`float`)
                 * roundPayoutFactor (`float` or None)
                 * roundNumber (`int`)
                 * roundOpenTime (`datetime`)
@@ -1436,8 +1441,14 @@ class Api:
             v2RoundModelPerformances(modelId: $modelId
                                      tournament: $tournament) {
                 atRisk
-                corrMultiplier,
-                mmcMultiplier,
+                payoutMultipliers {
+                    id
+                    scoreConfigId
+                    name
+                    version
+                    displayName
+                    multiplier
+                }
                 roundPayoutFactor,
                 roundNumber,
                 roundOpenTime,
