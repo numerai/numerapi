@@ -5,7 +5,7 @@ def load(path):
     return open(path, "r").read()
 
 
-numerapi_version = "3.1.0.dev0"
+numerapi_version = "3.1.0.dev1"
 
 classifiers = [
     "Development Status :: 5 - Production/Stable",
