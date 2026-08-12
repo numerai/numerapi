@@ -751,13 +751,6 @@ class Api:
             list of dicts: round entries matching the provided filters. Each
             entry includes ``roundScoreConfigs``, whose items retain the exact
             score identity and per-round payout settings returned by the API.
-
-            The legacy ``minCorrMultiplier`` through
-            ``defaultMmcMultiplier`` keys remain until numerapi 3.0.0. They are
-            compatibility projections of payout configs whose names are
-            exactly ``correlation`` or ``meta_model_contribution``; they are
-            ``None`` when no such payout config exists. Use
-            ``roundScoreConfigs`` for all new integrations.
         """
         query = """
             query($tournament: Int
@@ -835,56 +828,7 @@ class Api:
                 utils.replace(
                     config, "scoringEnd", utils.parse_datetime_string
                 )
-            self._add_legacy_round_multipliers(round_info)
         return rounds
-
-    @staticmethod
-    def _add_legacy_round_multipliers(round_info: dict) -> None:
-        """Add deprecated, identity-safe round multiplier projections."""
-        legacy_scores = {
-            "Corr": "correlation",
-            "Mmc": "meta_model_contribution",
-        }
-        multiplier_fields = {
-            "min": "minMultiplier",
-            "max": "maxMultiplier",
-            "default": "defaultMultiplier",
-        }
-
-        for legacy_name, score_name in legacy_scores.items():
-            matches = [
-                config
-                for config in round_info["roundScoreConfigs"]
-                if config["isPayout"] and config["name"] == score_name
-            ]
-            config = Api._select_legacy_round_config(matches)
-            for prefix, config_field in multiplier_fields.items():
-                field = f"{prefix}{legacy_name}Multiplier"
-                round_info[field] = (
-                    None if config is None else config[config_field]
-                )
-
-    @staticmethod
-    def _select_legacy_round_config(configs: List[Dict]) -> Dict | None:
-        """Select the latest config, failing closed on ambiguous versions."""
-        if not configs:
-            return None
-
-        latest_start = max(item["roundNumberStart"] for item in configs)
-        candidates = [
-            item for item in configs if item["roundNumberStart"] == latest_start
-        ]
-        if len(candidates) == 1:
-            return candidates[0]
-
-        try:
-            return max(
-                candidates,
-                key=lambda item: (int(item["version"]), item["id"]),
-            )
-        except (TypeError, ValueError):
-            # A future non-numeric version contract cannot be ordered safely.
-            return None
 
     def set_bio(self, model_id: str, bio: str) -> bool:
         """Set bio field for a model id.
@@ -1461,8 +1405,13 @@ class Api:
             content:
 
                 * atRisk (`float`)
-                * corrMultiplier (`float` or None)
-                * mmcMultiplier (`float` or None)
+                * payoutMultipliers (`list`): exact payout score configurations
+                    * id (`str`): round score configuration ID
+                    * scoreConfigId (`str`): score configuration ID
+                    * name (`str`)
+                    * version (`str`)
+                    * displayName (`str`)
+                    * multiplier (`float`)
                 * roundPayoutFactor (`float` or None)
                 * roundNumber (`int`)
                 * roundOpenTime (`datetime`)
@@ -1492,8 +1441,14 @@ class Api:
             v2RoundModelPerformances(modelId: $modelId
                                      tournament: $tournament) {
                 atRisk
-                corrMultiplier,
-                mmcMultiplier,
+                payoutMultipliers {
+                    id
+                    scoreConfigId
+                    name
+                    version
+                    displayName
+                    multiplier
+                }
                 roundPayoutFactor,
                 roundNumber,
                 roundOpenTime,

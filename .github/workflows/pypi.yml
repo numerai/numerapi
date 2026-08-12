@@ -3,7 +3,11 @@ name: Upload Python Package
 on:
   push:
     tags:
-      - "*"
+      # Release tags are bare version numbers: 3.1.2, 3.1.2.dev0
+      - "[0-9]*"
+      # A `v` prefix is NOT a valid release tag. It is matched here only so the
+      # job can fail with an explanatory error instead of silently doing nothing.
+      - "v[0-9]*"
 
 jobs:
   build-n-publish:
@@ -11,6 +15,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          # full history so the master-ancestry check below can run
+          fetch-depth: 0
       - name: Set up Python 3.10
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
@@ -19,11 +26,61 @@ jobs:
         run: >-
           python -m
           pip install
-          build wheel
+          build wheel packaging
           --user
+      - name: Verify tag format and version match
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import re
+          import sys
+          from packaging.version import Version
+
+          tag = os.environ["TAG_NAME"]
+          if tag.startswith("v"):
+              sys.exit(
+                  f"::error::Release tags must be bare version numbers. "
+                  f"`{tag}` has a `v` prefix; delete it and tag `{tag[1:]}` instead."
+              )
+          pkg = re.search(
+              r'numerapi_version\s*=\s*"([^"]+)"',
+              pathlib.Path("setup.py").read_text(),
+          ).group(1)
+          print(f"tag={tag} setup.py={pkg}")
+          if Version(tag) != Version(pkg):
+              sys.exit(
+                  f"::error::Tag {tag} does not match setup.py numerapi_version={pkg}"
+              )
+          print(f"::notice::publishing numerapi {Version(pkg)}")
+          PY
+      - name: Final releases must come from master
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+        run: |
+          python - <<'PY' > prerelease.txt
+          import os
+          from packaging.version import Version
+
+          print("yes" if Version(os.environ["TAG_NAME"]).is_prerelease else "no")
+          PY
+          if [ "$(cat prerelease.txt)" = "no" ]; then
+            git fetch --no-tags --quiet origin master
+            if git merge-base --is-ancestor "$GITHUB_SHA" FETCH_HEAD; then
+              echo "final release from a commit on master: ok"
+            else
+              echo "::error::Final release tags must point at a commit on master; $GITHUB_SHA is not one. Cut pre-releases (e.g. 3.1.2.dev0) from preview instead."
+              exit 1
+            fi
+          else
+            echo "pre-release: master-ancestry check skipped"
+          fi
+          rm -f prerelease.txt
       - name: Build a binary wheel and a source tarball
         run: >-
-          python setup.py sdist && python setup.py bdist_wheel
+          python -m build
       - name: Publish distribution 📦 to PyPI
         if: startsWith(github.ref, 'refs/tags')
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b
