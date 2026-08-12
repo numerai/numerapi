@@ -1,7 +1,7 @@
 # Changelog
 Notable changes to this project.
 
-## [3.1.2] - Unreleased
+## [3.1.2] - 2026-08-12
 - replace deprecated `round_model_performances_v2` Corr/MMC multiplier fields
   with the exact `payoutMultipliers` list
 - support Python 3.14 and pandas 3: require `pandas>=2.3.3` on Python 3.14 and
